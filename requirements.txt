@@ -13,3 +13,6 @@ groq
 supabase
 streamlit-agraph
 sentence-transformers
+pypinyin
+openpyxl
+jieba

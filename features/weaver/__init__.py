@@ -4,13 +4,14 @@ Nguyên tắc: Composition - Ghép các sub-features thành module lớn
 """
 
 import streamlit as st
-from typing import Optional, Dict
+from typing import Optional, Dict, Any
 from engines.ai_engine import AIEngine
+from engines.embedding_engine import EmbeddingEngine        # ✅ Thêm import này
+from engines.kg_engine import KnowledgeGraphEngine          # ✅ Thêm import này
 from core.i18n_block import I18nBlock
-from core.config_block import ConfigBlock  # Thêm dependency config
-from typing import Any, Dict, Optional
+from core.config_block import ConfigBlock
 
-# Import các sub-feature (tất cả đều ở cùng folder features/weaver/)
+# Import các sub-feature
 from .rag_feature import RagFeature
 from .translation_feature import TranslationFeature
 from .debate_feature import DebateFeature
@@ -21,11 +22,6 @@ from .history_feature import HistoryFeature
 class WeaverFeature:
     """
     Aggregator cho tất cả sub-features của Weaver
-    
-    Dependencies:
-    - AIEngine: dùng chung cho tất cả sub-feature
-    - I18nBlock: đa ngôn ngữ UI (optional)
-    - ConfigBlock: cấu hình toàn cục (optional, inject vào sub-feature sau này)
     """
     
     def __init__(
@@ -42,6 +38,7 @@ class WeaverFeature:
         self.i18n = i18n
         self.config = config
     
+        # Khởi tạo các sub-features
         self.features: Dict[str, Any] = self._init_features()
     
     def _init_features(self) -> Dict[str, Any]:
@@ -53,7 +50,11 @@ class WeaverFeature:
         }
         
         return {
-            "rag": RagFeature(**common_kwargs),
+            "rag": RagFeature(
+                **common_kwargs, 
+                embedding_engine=self.embedding_engine,
+                kg_engine=self.kg_engine
+            ),
             "translation": TranslationFeature(**common_kwargs),
             "debate": DebateFeature(**common_kwargs),
             "voice": VoiceFeature(**common_kwargs),
@@ -70,7 +71,7 @@ class WeaverFeature:
         """Render toàn bộ Weaver UI bằng tabs"""
         st.title(self.t("weaver_title", "🧠 Cognitive Weaver"))
         
-        # Tạo tabs theo thứ tự cố định
+        # Tạo tabs
         tab_labels = [
             self.t("weaver_rag", "📚 RAG & Phân tích sách"),
             self.t("weaver_translator", "✍️ Dịch Giả"),
@@ -81,7 +82,7 @@ class WeaverFeature:
         
         tabs = st.tabs(tab_labels)
         
-        # Render từng tab với try-except để tránh crash nếu một tab lỗi
+        # Render từng tab
         with tabs[0]:
             try:
                 self.features["rag"].render()

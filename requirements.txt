@@ -1,6 +1,6 @@
 # Core / Streamlit & UI
 streamlit
-streamlit-agraph              # Graph visualization trong KG/RAG
+streamlit-agraph==0.0.5       # Graph visualization trong KG/RAG
 streamlit-mic-recorder        # Ghi âm mic (nếu dùng voice feature)
 
 # AI & LLM Providers

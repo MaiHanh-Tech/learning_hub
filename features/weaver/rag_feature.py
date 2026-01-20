@@ -106,12 +106,13 @@ class RagFeature:
         
         # 3. Render Knowledge Graph
         st.subheader(self.t("t1_graph_title", "🪐 Vũ trụ Sách (Knowledge Graph)"))
+        
         try:
-            graph_component = self.kg.render_graph()
-            if graph_component:
-                st.components.v1.html(graph_component.to_html(), height=600)
-            else:
+            
+            self.kg.render_graph()
+            
+            if self.kg.graph.number_of_nodes() == 0:
                 st.info("Knowledge Graph chưa có dữ liệu sách. Upload Excel để bắt đầu.")
+                
         except Exception as e:
             st.error(f"❌ Lỗi render graph: {str(e)}")
-            st.info("Kiểm tra: streamlit-agraph đã install? Import có đúng 'from streamlit_agraph import agraph, Node, Edge'?")

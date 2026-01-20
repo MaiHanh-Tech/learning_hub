@@ -21,6 +21,8 @@ def main():
         .with_i18n(languages=["vi", "en", "zh"], default="vi")
         .with_auth(method="password")           # Supabase + hard admin fallback
         .with_ai_engine(default_model="gemini-pro")
+        .with_embedding_engine()                # Tạo bộ não xử lý vector
+        .with_kg_engine()                       # Tạo vũ trụ kiến thức (phụ thuộc vector)
         .with_feature("weaver")                 # Cognitive Weaver (RAG, Translation, Debate, Voice, History)
         .with_feature("cfo")                    # CFO Controller (Dashboard, Analysis, Risk)
         .with_sidebar(enabled=True)

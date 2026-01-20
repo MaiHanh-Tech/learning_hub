@@ -1,28 +1,38 @@
+# --- Core & UI ---
 streamlit
-google-generativeai
 pandas
-sentence-transformers
-scikit-learn
-pypdf
-python-docx
-beautifulsoup4
-openpyxl
 numpy
-gspread
-oauth2client
+scikit-learn
 plotly
 markdown
-edge-tts
-streamlit-agraph
-networkx
-google-auth
-python-telegram-bot  
-langdetect          
-streamlit-mic-recorder
-pydantic-ai
+
+# --- File & Data Processing ---
+beautifulsoup4
+python-docx
+pypdf
+openpyxl
 pypinyin
 jieba
+langdetect
+gspread
+oauth2client
+google-auth
+
+# --- AI & LLM APIs ---
+google-generativeai
+openai
 groq
 supabase
-torch
-openai
+pydantic-ai
+
+# --- Voice & Multimedia ---
+edge-tts
+streamlit-mic-recorder
+
+# --- Knowledge Graph ---
+networkx
+streamlit-agraph
+
+# --- Heavy Libraries (Để cuối cùng) ---
+# sentence-transformers tự động cài torch bản phù hợp
+sentence-transformers

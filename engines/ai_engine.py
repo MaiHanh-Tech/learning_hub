@@ -81,18 +81,28 @@ class AIEngine:
         self._show_status()
     
     def _init_providers(self) -> dict:
-        """Initialize AI providers"""
         providers = {}
-        
+    
+        st.caption("--- AI Providers Debug Start ---")
+    
         # Gemini
         try:
+            gemini_key = None
             if "api_keys" in st.secrets and "gemini_api_key" in st.secrets["api_keys"]:
-                import google.generativeai as genai
-                genai.configure(api_key=st.secrets["api_keys"]["gemini_api_key"])
-                providers[AIProvider.GEMINI.value] = "ready"
-        except Exception:
-            pass
+                gemini_key = st.secrets["api_keys"]["gemini_api_key"]
+            elif "gemini_api_key" in st.secrets:
+                gemini_key = st.secrets["gemini_api_key"]
         
+            if gemini_key:
+                import google.generativeai as genai
+                genai.configure(api_key=gemini_key)
+                providers[AIProvider.GEMINI.value] = "ready"
+                st.caption("Gemini: READY ✅")
+            else:
+                st.caption("Gemini: MISSING KEY ❌")
+        except Exception as e:
+            st.caption(f"Gemini: ERROR - {str(e)}")
+    
         # DeepSeek
         try:
             if "deepseek" in st.secrets and "api_key" in st.secrets["deepseek"]:
@@ -102,9 +112,12 @@ class AIEngine:
                     base_url="https://api.deepseek.com/v1",
                     timeout=30
                 )
-        except Exception:
-            pass
-        
+                st.caption("DeepSeek: READY ✅")
+            else:
+                st.caption("DeepSeek: MISSING KEY ❌")
+        except Exception as e:
+            st.caption(f"DeepSeek: ERROR - {str(e)}")
+    
         # Grok
         try:
             if "xai" in st.secrets and "api_key" in st.secrets["xai"]:
@@ -114,9 +127,14 @@ class AIEngine:
                     base_url="https://api.x.ai/v1",
                     timeout=30
                 )
-        except Exception:
-            pass
-        
+                st.caption("Grok: READY ✅")
+            else:
+                st.caption("Grok: MISSING KEY ❌")
+        except Exception as e:
+            st.caption(f"Grok: ERROR - {str(e)}")
+    
+        st.caption("--- AI Providers Debug End ---")
+    
         return providers
     
     def _show_status(self):

@@ -4,7 +4,7 @@ Nguyên tắc: Single Responsibility - Chỉ lo dịch thuật
 """
 
 import streamlit as st
-from typing import Optional
+from typing import Any, Dict, Optional
 from engines.ai_engine import AIEngine
 from core.i18n_block import I18nBlock
 

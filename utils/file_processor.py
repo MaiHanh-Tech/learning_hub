@@ -1,11 +1,16 @@
-# utils/file_processor.py
+"""
+META-BLOCK: File Processor Utility
+Nguyên tắc: Single Responsibility - Chỉ lo đọc/clean file (PDF, Docx, Text, Pinyin)
+"""
+
 from pypdf import PdfReader
 from docx import Document
 import re
 import pypinyin
 
 def doc_file(uploaded_file):
-    if not uploaded_file: return ""
+    if not uploaded_file:
+        return ""
     ext = uploaded_file.name.split('.')[-1].lower()
     try:
         if ext == "pdf":
@@ -16,17 +21,47 @@ def doc_file(uploaded_file):
             return "\n".join([p.text for p in doc.paragraphs])
         elif ext in ["txt", "md", "html"]:
             return str(uploaded_file.read(), "utf-8")
-    except:
+    except Exception as e:
+        st.warning(f"Lỗi đọc file {uploaded_file.name}: {e}")
         return ""
     return ""
 
 def clean_pdf_text(text):
-    if not text: return ""
+    if not text:
+        return ""
     text = re.sub(r'(\w+)-\s*\n\s*(\w+)', r'\1\2', text)
     text = re.sub(r'(?<!\n)\n(?!\n)', ' ', text)
     text = re.sub(r'\s+', ' ', text)
     text = text.replace('•', '•')
+    # common PDF split fixes
     text = text.replace('impor tant', 'important').replace('scienti c', 'scientific')
     return text.strip()
 
-# Các hàm khác nếu cần: split_smart_chunks, convert_to_pinyin
+def split_smart_chunks(text, chunk_size=1500, max_total_chars=50000):
+    if not text:
+        return []
+    if len(text) > max_total_chars:
+        text = text[:max_total_chars]
+    sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z"\'(])', text)
+    chunks = []
+    current = ""
+    for s in sentences:
+        if len(current) + len(s) < chunk_size:
+            current += s + " "
+        else:
+            if current:
+                chunks.append(current.strip())
+            current = s + " "
+    if current:
+        chunks.append(current.strip())
+    return chunks
+
+def convert_to_pinyin(text):
+    if not text:
+        return ""
+    if any('\u4e00' <= ch <= '\u9fff' for ch in text):
+        try:
+            return ' '.join([i[0] for i in pypinyin.pinyin(text, style=pypinyin.TONE)])
+        except:
+            return ""
+    return ""

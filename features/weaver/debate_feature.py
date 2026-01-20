@@ -4,7 +4,7 @@ Nguyên tắc: Single Responsibility - Chỉ lo chức năng Tranh Biện / Deba
 """
 
 import streamlit as st
-from typing import Optional, Dict
+from typing import Any, Dict, Optional
 from engines.ai_engine import AIEngine
 from core.i18n_block import I18nBlock
 from prompts import DEBATE_PERSONAS  # migrate từ prompts.py cũ

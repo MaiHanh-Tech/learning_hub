@@ -7,6 +7,7 @@ import streamlit as st
 from typing import Any, Dict, Optional
 from engines.ai_engine import AIEngine
 from core.i18n_block import I18nBlock
+from core.config_block import ConfigBlock 
 
 class TranslationFeature:
     """
@@ -17,12 +18,12 @@ class TranslationFeature:
     - I18nBlock: Để hiển thị UI đa ngôn ngữ
     """
     
-    def __init__(self, ai_engine: AIEngine, i18n: Optional[I18nBlock] = None):
+    def __init__(self, ai_engine: AIEngine, i18n: Optional[I18nBlock] = None, config: Optional[ConfigBlock] = None):
         self.ai = ai_engine
         self.i18n = i18n
+        self.config = config or {} # Lưu config lại (dù chưa dùng ngay)
     
     def t(self, key: str) -> str:
-        """Helper để translate UI"""
         if self.i18n:
             return self.i18n.t(key, key)
         return key

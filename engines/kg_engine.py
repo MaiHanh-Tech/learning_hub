@@ -11,9 +11,7 @@ from datetime import datetime
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.cluster import AgglomerativeClustering
-
-# Import đúng cho streamlit-agraph (đã install trong requirements.txt)
-from streamlit_agraph import agraph, Node, Edge, Config  # <-- Sửa ở đây
+from streamlit_agraph import agraph, Node, Edge, Config 
 
 
 class KnowledgeGraphEngine:

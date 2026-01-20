@@ -3,6 +3,7 @@ import streamlit as st
 from typing import List, Dict, Optional
 from datetime import datetime
 from sklearn.metrics.pairwise import cosine_similarity
+# 👇 Import đầy đủ để không bị lỗi 'Node is not defined'
 from streamlit_agraph import agraph, Node, Edge, Config
 
 class KnowledgeGraphEngine:

@@ -31,14 +31,17 @@ class WeaverFeature:
     def __init__(
         self,
         ai_engine: AIEngine,
+        embedding_engine: EmbeddingEngine,
+        kg_engine: KnowledgeGraphEngine,
         i18n: Optional[I18nBlock] = None,
         config: Optional[ConfigBlock] = None
     ):
         self.ai = ai_engine
+        self.embedding_engine = embedding_engine
+        self.kg_engine = kg_engine
         self.i18n = i18n
         self.config = config
-        
-        # Khởi tạo tất cả sub-features (composition)
+    
         self.features: Dict[str, Any] = self._init_features()
     
     def _init_features(self) -> Dict[str, Any]:

@@ -167,31 +167,29 @@ class AppBuilder:
         return labels.get(feature_name, feature_name.capitalize())
     
     def _load_feature(self, feature_name: str):
-        """Load động feature từ thư mục features"""
+        """Load động feature từ features/weaver hoặc features/cfo"""
         try:
-            # Tìm trong features/weaver hoặc features/cfo
-            module_path = f"features.weaver.{feature_name}_feature" if feature_name in ["rag", "translation", "debate", "voice", "history"] else \
-                          f"features.cfo.{feature_name}_feature"
-            
-            # Import động
-            module = importlib.import_module(module_path)
-            feature_class_name = "".join(word.capitalize() for word in feature_name.split("_")) + "Feature"
-            feature_class = getattr(module, feature_class_name)
-            
-            # Khởi tạo với dependencies
-            feature_instance = feature_class(
-                ai_engine=self._components.get("ai_engine"),
-                i18n=self._components.get("i18n"),
-                config=self._components.get("config")
-                # Thêm các dependency khác nếu feature cần (voice_engine, db_block, ...)
-            )
-            
-            feature_instance.render()
-            
-        except ImportError as e:
-            st.error(f"❌ Không tìm thấy module feature '{feature_name}': {e}")
-        except AttributeError as e:
-            st.error(f"❌ Không tìm thấy class trong module '{feature_name}': {e}")
+            # Chỉ load 'weaver' từ features/weaver/__init__.py
+            if feature_name == "weaver":
+                from features.weaver import WeaverFeature
+                feature_instance = WeaverFeature(
+                    ai_engine=self._components.get("ai_engine"),
+                    i18n=self._components.get("i18n"),
+                    config=self._components.get("config")
+                )
+                feature_instance.render()
+        
+            # CFO (nếu có sau này)
+            elif feature_name == "cfo":
+                st.info("Module CFO đang phát triển, sẽ sớm hoàn thiện")
+                # from features.cfo import CFOFeature
+                # ... (comment tạm nếu chưa có folder cfo)
+        
+            else:
+                st.warning(f"Feature '{feature_name}' chưa được triển khai")
+    
+        except ImportError as ie:
+            st.error(f"Import lỗi: {str(ie)}")
+            st.info("Kiểm tra: folder features/weaver/ có tồn tại? Có file __init__.py với class WeaverFeature?")
         except Exception as e:
-            st.error(f"❌ Lỗi khi render feature '{feature_name}': {str(e)}")
-            # st.exception(e)  # Bật khi debug, tắt khi production
+            st.error(f"Lỗi render feature '{feature_name}': {str(e)}")

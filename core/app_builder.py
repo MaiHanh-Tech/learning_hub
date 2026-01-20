@@ -181,9 +181,13 @@ class AppBuilder:
         
             # CFO (nếu có sau này)
             elif feature_name == "cfo":
-                st.info("Module CFO đang phát triển, sẽ sớm hoàn thiện")
-                # from features.cfo import CFOFeature
-                # ... (comment tạm nếu chưa có folder cfo)
+                from features.cfo import CFOFeature
+                feature_instance = CFOFeature(
+                    ai_engine=self._components.get("ai_engine"),
+                    i18n=self._components.get("i18n"),
+                    config=self._components.get("config")
+                )
+                feature_instance.render()
         
             else:
                 st.warning(f"Feature '{feature_name}' chưa được triển khai")

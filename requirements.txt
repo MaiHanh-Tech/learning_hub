@@ -1,5 +1,6 @@
 # Core / Streamlit & UI
 streamlit
+streamlit-agraph
 pyvis==0.3.2                  # Graph visualization trong KG/RAG
 streamlit-mic-recorder        # Ghi âm mic (nếu dùng voice feature)
 

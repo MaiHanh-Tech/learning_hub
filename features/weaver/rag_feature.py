@@ -9,11 +9,7 @@ from engines.ai_engine import AIEngine
 from engines.embedding_engine import EmbeddingEngine
 from engines.kg_engine import KnowledgeGraphEngine
 from core.i18n_block import I18nBlock
-# Import từ utils (sau khi migrate file_processor.py sang utils/)
-# from utils.file_processor import doc_file, clean_pdf_text
-
-# Tạm dùng import cũ nếu chưa migrate
-from services.blocks.file_processor import doc_file, clean_pdf_text
+from utils.file_processor import doc_file, clean_pdf_text
 
 
 class RagFeature:

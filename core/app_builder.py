@@ -169,11 +169,12 @@ class AppBuilder:
     def _load_feature(self, feature_name: str):
         """Load động feature từ features/weaver hoặc features/cfo"""
         try:
-            # Chỉ load 'weaver' từ features/weaver/__init__.py
             if feature_name == "weaver":
                 from features.weaver import WeaverFeature
                 feature_instance = WeaverFeature(
                     ai_engine=self._components.get("ai_engine"),
+                    embedding_engine=self._components.get("embedding_engine"),  # Cần có trong components
+                    kg_engine=self._components.get("kg_engine"),                # Cần có trong components
                     i18n=self._components.get("i18n"),
                     config=self._components.get("config")
                 )

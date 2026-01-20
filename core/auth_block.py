@@ -1,72 +1,47 @@
 """
 META-BLOCK: Authentication Block
-Nguyên tắc: Single Responsibility - Chỉ lo xác thực người dùng
+Phiên bản đơn giản: Chỉ dùng mật khẩu cứng từ secrets.toml, không cần Supabase
 """
 
 import streamlit as st
-from typing import Optional
 import hashlib
 
 class AuthBlock:
-    """
-    Authentication block
-    
-    Methods:
-    - Password (default)
-    - Future: OAuth, JWT, etc.
-    
-    Lợi ích:
-    - Tập trung hóa auth logic
-    - Dễ mở rộng (thêm SSO sau này chỉ sửa 1 file)
-    - Bảo mật: Hash passwords, session-based
-    """
-    
     def __init__(self, method: str = "password"):
-        self.method = method
-        self.users = self._load_users()  # Load from secrets.toml or db
-    
-    def _load_users(self) -> dict:
-        """Load user credentials (from st.secrets or external db)"""
-        try:
-            return st.secrets["auth"]["users"]  # Expect: {"username": "hashed_password"}
-        except KeyError:
-            st.warning("⚠️ No users configured in secrets.toml")
-            return {}
+        # Lấy hash mật khẩu admin từ secrets.toml
+        self.admin_password_hash = st.secrets.get("admin_password_hash", "")
+        if not self.admin_password_hash:
+            st.error("❌ Chưa cấu hình admin_password_hash trong secrets.toml")
     
     def check_login(self) -> bool:
-        """Check if user is logged in"""
+        """Kiểm tra đã login chưa qua session"""
         return st.session_state.get("authenticated", False)
     
     def render_login_ui(self):
-        """Render login form"""
-        st.title("🔒 Đăng Nhập")
+        """Hiển thị form login chỉ cần mật khẩu"""
+        st.title("🔒 Đăng Nhập Admin")
         
         with st.form(key="login_form"):
-            username = st.text_input("Tên đăng nhập")
-            password = st.text_input("Mật khẩu", type="password")
+            password = st.text_input("Mật khẩu Admin", type="password")
             submit = st.form_submit_button("Đăng nhập")
             
             if submit:
-                if self._verify_credentials(username, password):
+                if not password:
+                    st.error("Vui lòng nhập mật khẩu")
+                    return
+                
+                input_hash = hashlib.sha256(password.encode()).hexdigest()
+                
+                if input_hash == self.admin_password_hash:
                     st.session_state["authenticated"] = True
-                    st.session_state["current_user"] = username
-                    st.success("✅ Đăng nhập thành công!")
-                    st.rerun()
+                    st.session_state["current_user"] = "Admin"
+                    st.session_state["is_admin"] = True
+                    st.success("✅ Đăng nhập thành công! Đang chuyển hướng...")
+                    st.rerun()  # Quan trọng: rerurn để load lại app
                 else:
-                    st.error("❌ Sai tên đăng nhập hoặc mật khẩu")
+                    st.error("❌ Mật khẩu sai")
     
-    def _verify_credentials(self, username: str, password: str) -> bool:
-        """Verify password (hashed)"""
-        if username in self.users:
-            hashed_pw = hashlib.sha256(password.encode()).hexdigest()
-            return hashed_pw == self.users[username]
-        return False
-    
-    def require_auth(self, func):
-        """Decorator to require authentication"""
-        def wrapper(*args, **kwargs):
-            if not self.check_login():
-                self.render_login_ui()
-                st.stop()
-            return func(*args, **kwargs)
-        return wrapper
+    def logout(self):
+        """Đăng xuất"""
+        st.session_state.clear()
+        st.rerun()

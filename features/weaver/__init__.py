@@ -8,6 +8,7 @@ from typing import Optional, Dict
 from engines.ai_engine import AIEngine
 from core.i18n_block import I18nBlock
 from core.config_block import ConfigBlock  # Thêm dependency config
+from typing import Any, Dict, Optional
 
 # Import các sub-feature (tất cả đều ở cùng folder features/weaver/)
 from .rag_feature import RagFeature

@@ -1,44 +1,15 @@
-# Core / Streamlit & UI
 streamlit
-streamlit-agraph==2.0.0
-pyvis==0.3.2                  # Graph visualization trong KG/RAG
-streamlit-mic-recorder        # Ghi âm mic (nếu dùng voice feature)
-
-# AI & LLM Providers
-google-generativeai           # Gemini
-groq                          # Groq (nếu dùng)
-openai                        # DeepSeek + Grok (OpenAI-compatible client)
-pydantic-ai                   # (nếu dùng Pydantic cho structured output)
-
-# Data & Processing
-beautifulsoup4
-gspread
-numpy
-openpyxl
 pandas
+numpy
 scikit-learn
-torch                         # Phụ thuộc sentence-transformers
-
-# File & Text Processing
-pypdf                         # PDF
-python-docx                   # Docx
-pypinyin                      # Pinyin cho tiếng Trung
-jieba                         # Word segmentation tiếng Trung
-langdetect                    # Phát hiện ngôn ngữ
-
-# TTS / Voice
+networkx
+beautifulsoup4
+python-docx
+pypdf
 edge-tts
-
-# Auth & API
-google-auth
-oauth2client
-python-telegram-bot           # Telegram integration (nếu có)
-supabase                      # Supabase client
-
-# Visualization & Utils
-plotly
-markdown
-networkx                      # Knowledge Graph
-
-# Legacy / Optional (nếu cần)
-sentence-transformers         # Embedding
+google-generativeai
+openai
+groq
+supabase
+streamlit-agraph
+sentence-transformers

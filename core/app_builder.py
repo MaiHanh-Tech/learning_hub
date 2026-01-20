@@ -82,10 +82,13 @@ class AppBuilder:
             st.error("⚠️ Lỗi logic: Phải gọi .with_embedding_engine() trước .with_kg_engine()")
             st.stop()
             
-        config = self._components.get("config")
+        
+        config_block = self._components.get("config")
+        kg_config = config_block.config if config_block else {} 
+        
         self._components["kg_engine"] = KnowledgeGraphEngine(
             embedding_engine=embedding_engine,
-            config=config
+            config=kg_config  # ✅ Truyền dict thuần để tránh lỗi .get() trả về None
         )
         return self
     

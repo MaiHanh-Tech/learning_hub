@@ -68,22 +68,14 @@ class CircuitBreaker:
             self.provider_status[provider]["last_failure"] = None
 
 class AIEngine:
-    """
-    AI Engine với Circuit Breaker
-    
-    Features:
-    - Auto fallback: Gemini → DeepSeek → Grok
-    - Circuit breaker: Skip failed providers
-    - Standardized response format
-    - Error logging
-    """
-    
-    def __init__(self, default_model: str = "gemini-pro"):
+    def __init__(self, default_model: str = "gemini-pro", config=None):
         self.default_model = default_model
-        self.circuit_breaker = CircuitBreaker()
+        self.config = config or {} 
         
-        # Initialize providers
+        
+        self.circuit_breaker = CircuitBreaker()
         self.providers = self._init_providers()
+        
         
         # Status display
         self._show_status()

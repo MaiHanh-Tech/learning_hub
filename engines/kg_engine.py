@@ -11,7 +11,39 @@ from datetime import datetime
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.cluster import AgglomerativeClustering
-from streamlit_agraph import agraph, Node, Edge, Config 
+from pyvis.network import Network
+
+def render_graph(self):
+    """Render interactive graph with pyvis"""
+    if self.graph.number_of_nodes() == 0:
+        st.info("Knowledge Graph chưa có dữ liệu. Upload Excel để bắt đầu.")
+        return None
+    
+    net = Network(height="600px", width="100%", directed=True, notebook=True)
+    
+    for node_id, data in self.graph.nodes(data=True):
+        net.add_node(
+            node_id,
+            label=data.get("title", "Unknown"),
+            color="#007bff",
+            size=25,
+            title=f"First principles: {data.get('first_principles', 'N/A')}"
+        )
+    
+    for source, target, data in self.graph.edges(data=True):
+        net.add_edge(
+            source, target,
+            label=f"{data.get('type', 'similar')}: {data.get('weight', 0):.2f}",
+            color="#6c757d",
+            width=data.get('weight', 1) * 2
+        )
+    
+    # Render HTML
+    html = net.generate_html()
+    st.components.v1.html(html, height=600, scrolling=True)
+    
+    st.caption(f"Graph: {self.graph.number_of_nodes()} nodes, {self.graph.number_of_edges()} edges")
+    return html
 
 
 class KnowledgeGraphEngine:

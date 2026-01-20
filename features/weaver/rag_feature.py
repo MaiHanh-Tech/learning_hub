@@ -4,7 +4,7 @@ Nguyên tắc: Single Responsibility - Chỉ lo RAG và Knowledge Graph
 """
 
 import streamlit as st
-from typing import Optional
+from typing import Any, Dict, Optional
 from engines.ai_engine import AIEngine
 from engines.embedding_engine import EmbeddingEngine
 from engines.kg_engine import KnowledgeGraphEngine

@@ -11,7 +11,10 @@ from datetime import datetime
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.cluster import AgglomerativeClustering
-from agraph import AGraph, Node, Edge
+
+# Import đúng cho streamlit-agraph (đã install trong requirements.txt)
+from streamlit_agraph import agraph, Node, Edge, Config  # <-- Sửa ở đây
+
 
 class KnowledgeGraphEngine:
     """
@@ -21,9 +24,10 @@ class KnowledgeGraphEngine:
     - EmbeddingEngine (cho vector hóa)
     """
     
-    def __init__(self, embedding_engine):
+    def __init__(self, embedding_engine, config: Optional[Dict] = None):
         self.graph = nx.DiGraph()
         self.embedding_engine = embedding_engine
+        self.config = config or {}
         self.episteme_layers = {
             "Toán học & Logic": [],
             "Vật lý & Sinh học": [],
@@ -68,40 +72,65 @@ class KnowledgeGraphEngine:
     
     def _auto_link_node(self, node_id: str):
         """Auto link to similar nodes"""
+        threshold = self.config.get("similarity_threshold", 0.7)  # Có thể config sau
         new_emb = self.graph.nodes[node_id]["embedding"]
         for existing_id in list(self.graph.nodes):
             if existing_id == node_id or self.graph.nodes[existing_id]["type"] != "book":
                 continue
             existing_emb = self.graph.nodes[existing_id]["embedding"]
             sim = cosine_similarity([new_emb], [existing_emb])[0][0]
-            if sim > 0.7:
+            if sim > threshold:
                 self.graph.add_edge(existing_id, node_id, weight=sim, type="similar")
     
     def render_graph(self):
-        """Render interactive graph with agraph"""
+        """Render interactive graph with streamlit-agraph"""
+        if self.graph.number_of_nodes() == 0:
+            st.info("Knowledge Graph chưa có dữ liệu sách. Upload Excel để bắt đầu.")
+            return None
+        
         nodes = []
         edges = []
+        
         for node_id, data in self.graph.nodes(data=True):
             nodes.append(Node(
                 id=node_id,
-                label=data["title"],
+                label=data.get("title", "Unknown"),
                 size=25,
-                color="#007bff"
+                color="#007bff",
+                title=f"First principles: {data.get('first_principles', 'N/A')}"  # Hover info
             ))
+        
         for source, target, data in self.graph.edges(data=True):
             edges.append(Edge(
                 source=source,
                 target=target,
-                label=f"{data.get('type', '')}: {data.get('weight', ''):.2f}",
-                color="#6c757d"
+                label=f"{data.get('type', 'similar')}: {data.get('weight', 0):.2f}",
+                color="#6c757d",
+                width=data.get('weight', 1) * 2  # Độ dày cạnh theo similarity
             ))
-        return AGraph(nodes=nodes, edges=edges)
+        
+        # Config graph (có thể tùy chỉnh sau)
+        config_graph = Config(
+            width=800,
+            height=600,
+            directed=True,
+            physics=True,
+            hierarchical=False
+        )
+        
+        # Render graph
+        return_value = agraph(
+            nodes=nodes,
+            edges=edges,
+            config=config_graph
+        )
+        
+        st.caption(f"Graph hiện tại: {self.graph.number_of_nodes()} nodes, {self.graph.number_of_edges()} edges")
+        return return_value
     
     def seed_knowledge_graph(self):
-        """Seed with selected books"""
+        """Seed with selected high-quality books (copy từ knowledge_graph_v2.py cũ)"""
         selected_books = [
-            # Danh sách 18 sách từ code cũ (knowledge_graph_v2.py)
-            # Tôi copy nguyên từ code cũ, giữ nguyên để migrate chính xác
             {
                 "title": "Probability Theory: The Logic of Science",
                 "author": "E.T. Jaynes",
@@ -109,29 +138,39 @@ class KnowledgeGraphEngine:
                 "first_principles": "Logic là cơ sở của khoa học; xác suất là công cụ đo lường niềm tin.",
                 "tags": ["math", "logic"]
             },
-            # ... (thêm tất cả 18 sách tương tự, nhưng để ngắn gọn, giả sử copy đầy đủ từ code cũ)
-            # Chị copy toàn bộ list selected_books từ knowledge_graph_v2.py vào đây
+            # ... (chị copy thêm 17 sách còn lại từ knowledge_graph_v2.py cũ vào đây)
+            # Ví dụ:
+            {
+                "title": "Thinking, Fast and Slow",
+                "author": "Daniel Kahneman",
+                "summary": "Phân tích hai hệ thống tư duy: nhanh (trực giác) và chậm (lý trí).",
+                "first_principles": "Hành vi con người bị chi phối bởi bias nhận thức.",
+                "tags": ["psychology", "decision-making"]
+            },
+            # Thêm đầy đủ danh sách 18 sách...
         ]
         success_count = 0
         for book in selected_books:
             try:
-                metadata = {"author": book["author"], "tags": book["tags"]}
+                metadata = {"author": book["author"], "tags": book.get("tags", [])}
                 self.add_book(
                     title=book["title"],
                     content_summary=book["summary"],
-                    first_principles=book["first_principles"],
+                    first_principles=book.get("first_principles", ""),
                     metadata=metadata
                 )
                 success_count += 1
-            except Exception:
+            except Exception as e:
+                st.warning(f"Lỗi add sách '{book.get('title', 'Unknown')}': {e}")
                 continue
+        st.success(f"Đã seed {success_count}/{len(selected_books)} sách vào Knowledge Graph")
         return success_count
     
-    def upgrade_from_excel(self, excel_path: str):
-        """Migrate from Excel (from old code)"""
+    def upgrade_from_excel(self, excel_file):
+        """Nâng cấp KG từ file Excel upload (migrate từ old code)"""
         import pandas as pd
         try:
-            df = pd.read_excel(excel_path).dropna(subset=["Tên sách"])
+            df = pd.read_excel(excel_file).dropna(subset=["Tên sách"])
             success_count = 0
             for _, row in df.iterrows():
                 title = str(row["Tên sách"]).strip()
@@ -145,5 +184,6 @@ class KnowledgeGraphEngine:
                 self.add_book(title, summary, first_principles="", metadata=metadata)
                 success_count += 1
             return success_count
-        except Exception:
+        except Exception as e:
+            st.error(f"❌ Lỗi đọc Excel: {str(e)}")
             return 0

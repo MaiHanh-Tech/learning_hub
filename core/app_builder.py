@@ -14,6 +14,8 @@ from core.config_block import ConfigBlock
 
 # Engines
 from engines.ai_engine import AIEngine
+from engines.embedding_engine import EmbeddingEngine
+from engines.kg_engine import KnowledgeGraphEngine
 
 class AppBuilder:
     """
@@ -64,6 +66,26 @@ class AppBuilder:
         self._components["ai_engine"] = AIEngine(
             default_model=default_model,
             config=config  # Truyền config nếu engine cần
+        )
+        return self
+
+    def with_embedding_engine(self):
+        """Block: Embedding Engine (Tạo vector)"""
+        # Engine này nặng, nên cache resource bên trong engine
+        self._components["embedding_engine"] = EmbeddingEngine()
+        return self
+
+    def with_kg_engine(self):
+        """Block: Knowledge Graph (Cần có Embedding Engine trước)"""
+        embedding_engine = self._components.get("embedding_engine")
+        if not embedding_engine:
+            st.error("⚠️ Lỗi logic: Phải gọi .with_embedding_engine() trước .with_kg_engine()")
+            st.stop()
+            
+        config = self._components.get("config")
+        self._components["kg_engine"] = KnowledgeGraphEngine(
+            embedding_engine=embedding_engine,
+            config=config
         )
         return self
     

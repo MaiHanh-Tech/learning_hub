@@ -7,6 +7,7 @@ import streamlit as st
 from typing import Any, Dict, Optional
 from engines.ai_engine import AIEngine
 from core.i18n_block import I18nBlock
+from core.config_block import ConfigBlock 
 from prompts import DEBATE_PERSONAS  # migrate từ prompts.py cũ
 
 class DebateFeature:
@@ -18,14 +19,12 @@ class DebateFeature:
     - I18nBlock: đa ngôn ngữ UI
     """
     
-    def __init__(self, ai_engine: AIEngine, i18n: Optional[I18nBlock] = None):
+    def __init__(self, ai_engine: AIEngine, i18n: Optional[I18nBlock] = None, config: Optional[ConfigBlock] = None):
         self.ai = ai_engine
         self.i18n = i18n
+        self.config = config or {} # Lưu config lại
         
-        # Migrate DEBATE_PERSONAS từ prompts.py cũ
         self.personas = DEBATE_PERSONAS
-        
-        # Session state cho chat history
         if "debate_messages" not in st.session_state:
             st.session_state.debate_messages = []
     

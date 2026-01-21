@@ -192,11 +192,12 @@ class WeaverFeature:
                                 "content": response.content
                             })
                             
-                            # Log
+                            # Log (với provider info)
                             self._log_to_supabase(
                                 event_type="debate",
                                 title=f"Debate with {selected}",
-                                content=f"User: {user_input}\n\nAI: {response.content[:500]}"
+                                content=f"User: {user_input}\n\nAI: {response.content[:500]}",
+                                provider=response.provider
                             )
                         else:
                             st.error(f"❌ {response.error}")
@@ -218,8 +219,14 @@ class WeaverFeature:
                 with st.chat_message("assistant", avatar="🗣️"):
                     st.markdown(msg["content"])
     
-    def _log_to_supabase(self, event_type: str, title: str, content: str):
-        """Log hoạt động vào Supabase"""
+    def _log_to_supabase(
+        self,
+        event_type: str,
+        title: str,
+        content: str,
+        provider: Optional[str] = None
+    ):
+        """Log hoạt động vào Supabase với provider info"""
         try:
             from supabase import create_client
             
@@ -229,12 +236,18 @@ class WeaverFeature:
             if url and key:
                 db = create_client(url, key)
                 
-                db.table("history_logs").insert({
+                data = {
                     "type": event_type,
                     "title": title,
                     "content": content,
                     "user_name": st.session_state.get("current_user", "Guest")
-                }).execute()
+                }
+                
+                # Thêm provider nếu có
+                if provider:
+                    data["provider"] = provider
+                
+                db.table("history_logs").insert(data).execute()
         
         except Exception as e:
             # [Unverified] Không hiển thị lỗi log cho user

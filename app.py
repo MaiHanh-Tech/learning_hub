@@ -1,30 +1,22 @@
+"""
+META-BLOCK: Application Entry Point 
+No debug messages, proper i18n, CFO enabled
+"""
+
 import streamlit as st
 from core.app_builder import AppBuilder
-import os
 
-# Debug imports
-st.sidebar.markdown("### 🐛 Debug")
-st.sidebar.code(f"CWD: {os.getcwd()}")
-
-try:
-    import features
-    st.sidebar.success("✅ features")
-except Exception as e:
-    st.sidebar.error(f"❌ features: {e}")
-
-try:
-    from features import WeaverFeature
-    st.sidebar.success("✅ WeaverFeature")
-except Exception as e:
-    st.sidebar.error(f"❌ WeaverFeature: {e}")
-
-try:
-    from features import HistoryFeature
-    st.sidebar.success("✅ HistoryFeature")
-except Exception as e:
-    st.sidebar.error(f"❌ HistoryFeature: {e}")
 
 def main():
+    """
+    Khởi động ứng dụng
+    
+    Features:
+    - Weaver: RAG + Debate (Solo + Multi) + History with Bayes
+    - CFO: Dashboard + Cost Analysis + Risk + What-If
+    """
+    
+    # Page config
     st.set_page_config(
         page_title="Cognitive Weaver",
         page_icon="🧠",
@@ -40,19 +32,18 @@ def main():
     # Custom CSS - Modern & Minimal
     st.markdown("""
         <style>
-            /* ===== GLOBAL STYLES ===== */
+            /* Global Styles */
             .stApp {
                 background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
             }
             
-            /* Dark mode support */
             @media (prefers-color-scheme: dark) {
                 .stApp {
                     background: linear-gradient(135deg, #1e1e1e 0%, #2d3748 100%);
                 }
             }
             
-            /* ===== SIDEBAR ===== */
+            /* Sidebar */
             section[data-testid="stSidebar"] > div:first-child {
                 background: rgba(255, 255, 255, 0.95);
                 backdrop-filter: blur(10px);
@@ -67,13 +58,13 @@ def main():
                 }
             }
             
-            /* ===== MAIN CONTENT ===== */
+            /* Main Content */
             .block-container {
                 padding: 2rem 3rem !important;
                 max-width: 1200px !important;
             }
             
-            /* ===== BUTTONS ===== */
+            /* Buttons */
             .stButton > button {
                 border-radius: 8px;
                 font-weight: 600;
@@ -86,7 +77,7 @@ def main():
                 box-shadow: 0 8px 16px rgba(0,0,0,0.15);
             }
             
-            /* ===== TABS ===== */
+            /* Tabs */
             .stTabs [data-baseweb="tab-list"] {
                 gap: 8px;
                 background: transparent;
@@ -98,7 +89,7 @@ def main():
                 font-weight: 600;
             }
             
-            /* ===== EXPANDERS ===== */
+            /* Expanders */
             .streamlit-expanderHeader {
                 border-radius: 8px;
                 background: rgba(255, 255, 255, 0.7);
@@ -112,13 +103,13 @@ def main():
                 }
             }
             
-            /* ===== METRICS ===== */
+            /* Metrics */
             [data-testid="stMetricValue"] {
                 font-size: 2rem;
                 font-weight: 700;
             }
             
-            /* ===== CHAT MESSAGES ===== */
+            /* Chat Messages */
             .stChatMessage {
                 background: rgba(255, 255, 255, 0.8);
                 backdrop-filter: blur(10px);
@@ -135,7 +126,7 @@ def main():
                 }
             }
             
-            /* ===== SCROLLBAR ===== */
+            /* Scrollbar */
             ::-webkit-scrollbar {
                 width: 8px;
                 height: 8px;
@@ -154,7 +145,7 @@ def main():
                 background: rgba(0,0,0,0.3);
             }
             
-            /* ===== ANIMATIONS ===== */
+            /* Animations */
             @keyframes fadeIn {
                 from { opacity: 0; transform: translateY(10px); }
                 to { opacity: 1; transform: translateY(0); }
@@ -164,22 +155,22 @@ def main():
                 animation: fadeIn 0.3s ease-out;
             }
             
-            /* ===== HIDE STREAMLIT BRANDING ===== */
+            /* Hide Streamlit Branding */
             #MainMenu {visibility: hidden;}
             footer {visibility: hidden;}
             header {visibility: hidden;}
         </style>
     """, unsafe_allow_html=True)
     
-    # Build app với AppBuilder
+    # Build app
     (
         AppBuilder()
         .with_config()
         .with_i18n(languages=["vi", "en", "zh"], default="vi")
         .with_auth(method="password")
         .with_ai_engine(default_model="gemini-pro")
-        .with_feature("weaver")      # Cognitive Weaver (RAG + Debate only)
-        .with_feature("history")     # History Logs
+        .with_feature("weaver")      # Cognitive Weaver (RAG + Debate + History)
+        .with_feature("cfo")          # CFO Controller (Dashboard + Analysis + Risk + What-If)
         .with_sidebar(enabled=True)
         .with_default_feature("weaver")
         .build()

@@ -1,6 +1,6 @@
 """
 META-BLOCK: AI Engine 
-Priority: Gemini Pro > DeepSeek > Grok
+Priority: Gemini Pro > DeepSeek
 """
 
 from typing import Optional, Callable
@@ -128,14 +128,13 @@ class AIEngine:
     ) -> AIResponse:
         """
         Generate AI response với auto fallback
-        Priority: Gemini > DeepSeek > Grok (skip if no credits)
+        Priority: Gemini > DeepSeek 
         """
         
         # Priority order
         provider_order = [
             AIProvider.GEMINI.value,
             AIProvider.DEEPSEEK.value,
-            # Grok cuối cùng (thường hết credits)
             AIProvider.GROK.value
         ]
         
@@ -211,31 +210,45 @@ class AIEngine:
         )
     
     def _call_gemini(self, prompt: str, system_instruction: Optional[str], model_type: str) -> str:
-        """Call Gemini API"""
-        import google.generativeai as genai
+            """Call Gemini API - thử nhiều model stable, fallback nếu cần"""
+            import google.generativeai as genai
         
-        # Use flash model (more stable)
-        model_name = "gemini-2.0-flash-exp"
+            # Danh sách model ưu tiên (stable, free tier thường có quota tốt hơn)
+            fallback_models = [
+                "gemini-2.5-flash",          # Stable flash, free tier tốt hơn
+                "gemini-2.5-flash-lite",     # Nếu có, nhẹ hơn và rẻ hơn
+                "gemini-2.5-pro",            # Nếu flash fail
+                "gemini-2.0-flash"           # Fallback cũ hơn nếu cần
+            ]
         
-        generation_config = {
-            "temperature": 0.7,
-            "top_p": 0.95,
-            "top_k": 40,
-            "max_output_tokens": 8192,
-        }
+            generation_config = {
+                "temperature": 0.7,
+                "top_p": 0.95,
+                "top_k": 40,
+                "max_output_tokens": 8192,
+            }
         
-        model = genai.GenerativeModel(
-            model_name=model_name,
-            generation_config=generation_config,
-            system_instruction=system_instruction
-        )
+            last_gemini_error = None
         
-        response = model.generate_content(prompt)
+            for model_name in fallback_models:
+                try:
+                    model = genai.GenerativeModel(
+                        model_name=model_name,
+                        generation_config=generation_config,
+                        system_instruction=system_instruction
+                    )
+                
+                    response = model.generate_content(prompt)
+                
+                    if response and response.text:
+                        return response.text.strip()
+            
+                except Exception as e:
+                    last_gemini_error = str(e)
+                    continue  # Thử model tiếp theo
         
-        if response and response.text:
-            return response.text.strip()
-        
-        raise Exception("Gemini returned empty response")
+            # Nếu tất cả model đều fail
+            raise Exception(f"Gemini failed all models. Last error: {last_gemini_error or 'Unknown'}")
     
     def _call_deepseek(
         self,

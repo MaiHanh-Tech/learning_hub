@@ -1,18 +1,30 @@
 import streamlit as st
 from core.app_builder import AppBuilder
+import os
 
+# Debug imports
+st.sidebar.markdown("### 🐛 Debug")
+st.sidebar.code(f"CWD: {os.getcwd()}")
+
+try:
+    import features
+    st.sidebar.success("✅ features")
+except Exception as e:
+    st.sidebar.error(f"❌ features: {e}")
+
+try:
+    from features import WeaverFeature
+    st.sidebar.success("✅ WeaverFeature")
+except Exception as e:
+    st.sidebar.error(f"❌ WeaverFeature: {e}")
+
+try:
+    from features import HistoryFeature
+    st.sidebar.success("✅ HistoryFeature")
+except Exception as e:
+    st.sidebar.error(f"❌ HistoryFeature: {e}")
 
 def main():
-    """
-    Khởi động ứng dụng với giao diện cải tiến
-    
-    Thay đổi:
-    1. Page config với layout wide + dark theme support
-    2. Custom CSS hiện đại, tối giản
-    3. Sidebar thu gọn, chỉ hiện menu cần thiết
-    """
-    
-    # Page config
     st.set_page_config(
         page_title="Cognitive Weaver",
         page_icon="🧠",

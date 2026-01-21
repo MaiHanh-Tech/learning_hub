@@ -1,8 +1,3 @@
-"""
-META-BLOCK: Weaver Feature (Minimized)
-Chỉ giữ: RAG + Debate (bỏ Translation, Voice, Graph)
-"""
-
 import streamlit as st
 from typing import Optional
 from engines.ai_engine import AIEngine
@@ -14,13 +9,6 @@ from prompts import BOOK_ANALYSIS_PROMPT, DEBATE_PERSONAS
 
 
 class WeaverFeature:
-    """
-    Cognitive Weaver - Phiên bản tối giản
-    
-    Features:
-    1. RAG (Book Analysis) - Phân tích sách thông minh
-    2. Debate Arena - Tranh biện với các nhân cách AI
-    """
     
     def __init__(
         self,
@@ -120,11 +108,12 @@ class WeaverFeature:
                                     st.markdown("## 📖 Kết quả Phân tích")
                                     st.markdown(response.content)
                                     
-                                    # Log vào Supabase
+                                    # Log vào Supabase (với provider info)
                                     self._log_to_supabase(
                                         event_type="book_analysis",
                                         title=uploaded.name,
-                                        content=response.content
+                                        content=response.content,
+                                        provider=response.provider
                                     )
                                 else:
                                     st.error(f"❌ {response.error}")

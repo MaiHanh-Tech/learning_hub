@@ -217,8 +217,7 @@ class AIEngine:
             fallback_models = [
                 "gemini-2.5-flash",          # Stable flash, free tier tốt hơn
                 "gemini-2.5-flash-lite",     # Nếu có, nhẹ hơn và rẻ hơn
-                "gemini-2.5-pro",            # Nếu flash fail
-                "gemini-2.0-flash"           # Fallback cũ hơn nếu cần
+                "gemini-2.5-pro"             # Nếu flash fail   
             ]
         
             generation_config = {

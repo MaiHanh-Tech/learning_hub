@@ -166,33 +166,45 @@ class AIEngine:
         )
     
     def _call_openrouter(
-        self,
-        prompt: str,
-        system_instruction: Optional[str],
-        max_tokens: int,
-        temperature: float
-    ) -> str:
-        """Call OpenRouter API với Gemini free model"""
-        client = self.providers[AIProvider.OPENROUTER.value]
+            self,
+            prompt: str,
+            system_instruction: Optional[str],
+            max_tokens: int,
+            temperature: float
+        ) -> str:
+            """Call OpenRouter API với fallback models tự động"""
+            client = self.providers[AIProvider.OPENROUTER.value]
         
-        messages = []
-        if system_instruction:
-            messages.append({"role": "system", "content": system_instruction})
-        messages.append({"role": "user", "content": prompt})
+            messages = []
+            if system_instruction:
+                messages.append({"role": "system", "content": system_instruction})
+            messages.append({"role": "user", "content": prompt})
         
-        response = client.chat.completions.create(
-            model="google/gemini-2.0-flash-exp:free",  # Gemini free variant (cập nhật nếu deprecate)
-            # Nếu muốn thử model free khác: "mistralai/devstral-2512:free" hoặc "xiaomi/mimo-v2-flash:free"
-            messages=messages,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            extra_headers={
-                "HTTP-Referer": "https://your-app-url.com",  # optional, để OpenRouter track
-                "X-Title": "Streamlit AI Engine"
-            }
-        )
+            # List fallback models theo thứ tự ưu tiên (free models context cao)
+            fallback_models = [
+                "google/gemini-2.0-flash-exp:free",          # Ưu tiên Gemini free (nếu còn)
+                "xiaomi/mimo-v2-flash:free",                 # 262K context, mạnh reasoning
+                "mistralai/devstral-2512:free",              # 262K, tốt coding (deprecating soon)
+                "nvidia/nemotron-3-nano-30b-a3b:free",       # 256K, agentic tốt
+                # Thêm nữa nếu cần: "arcee-ai/trinity-mini:free" (131K)
+            ]
+            
+            response = client.chat.completions.create(
+                # Truyền array models thay vì model đơn
+                models=fallback_models,  # <-- Đây là key: fallback tự động!
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                extra_headers={
+                    "HTTP-Referer": "https://your-app-url.com",  # optional
+                    "X-Title": "Streamlit AI Engine"
+                }
+            )
         
-        return response.choices[0].message.content.strip()
+            # response.model sẽ cho biết model nào thực tế được dùng (log nếu muốn)
+            # print(f"Used model: {response.model}")
+        
+            return response.choices[0].message.content.strip()
     
     def _call_deepseek(
         self,

@@ -24,13 +24,13 @@ class WeaverFeature:
     def __init__(
         self,
         ai_engine: AIEngine,
-        embedding_engine: EmbeddingEngine,
+        embedding_engine: Optional[EmbeddingEngine] = None,
         i18n: Optional[I18nBlock] = None,
         config: Optional[ConfigBlock] = None,
         **kwargs
     ):
         self.ai = ai_engine
-        self.embedding = embedding_engine
+        self.embedding = embedding_engine  # Can be None
         self.i18n = i18n
         self.config = config
         

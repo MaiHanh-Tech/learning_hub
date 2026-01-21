@@ -1,11 +1,5 @@
-"""
-META-BLOCK: Application Builder
-Nguyên tắc: Fluent Interface + Dependency Injection
-"""
-
 from typing import Dict, Any, Optional
 import streamlit as st
-import importlib
 
 # Core blocks
 from core.i18n_block import I18nBlock
@@ -15,24 +9,13 @@ from core.config_block import ConfigBlock
 # Engines
 from engines.ai_engine import AIEngine
 from engines.embedding_engine import EmbeddingEngine
-from engines.kg_engine import KnowledgeGraphEngine
+
 
 class AppBuilder:
     """
     Xây dựng App theo kiểu LEGO - Fluent Interface
     
-    Cách dùng trong app.py:
-        app = (
-            AppBuilder()
-            .with_config()                  # Thêm config block
-            .with_i18n(["vi", "en", "zh"])
-            .with_auth("password")
-            .with_ai_engine("gemini-pro")
-            .with_features("weaver")
-            .with_features("cfo")
-            .with_sidebar(enabled=True)
-            .build()
-        )
+    Updated: Thêm support cho History feature
     """
     
     def __init__(self):
@@ -65,31 +48,12 @@ class AppBuilder:
         config = self._components.get("config")
         self._components["ai_engine"] = AIEngine(
             default_model=default_model,
-            config=config  # Truyền config nếu engine cần
+            config=config
         )
-        return self
-
-    def with_embedding_engine(self):
-        """Block: Embedding Engine (Tạo vector)"""
-        # Engine này nặng, nên cache resource bên trong engine
+        
+        # Auto-create embedding engine (cần cho Weaver)
         self._components["embedding_engine"] = EmbeddingEngine()
-        return self
-
-    def with_kg_engine(self):
-        """Block: Knowledge Graph (Cần có Embedding Engine trước)"""
-        embedding_engine = self._components.get("embedding_engine")
-        if not embedding_engine:
-            st.error("⚠️ Lỗi logic: Phải gọi .with_embedding_engine() trước .with_kg_engine()")
-            st.stop()
-            
         
-        config_block = self._components.get("config")
-        kg_config = config_block.config if config_block else {} 
-        
-        self._components["kg_engine"] = KnowledgeGraphEngine(
-            embedding_engine=embedding_engine,
-            config=kg_config  # ✅ Truyền dict thuần để tránh lỗi .get() trả về None
-        )
         return self
     
     def with_feature(self, feature_name: str, config: dict = None):
@@ -113,24 +77,22 @@ class AppBuilder:
         return self
     
     def build(self):
-        """
-        Lắp ráp và chạy ứng dụng
-        """
-        # Lưu toàn bộ components vào session_state để các feature truy cập dễ dàng
+        """Lắp ráp và chạy ứng dụng"""
+        # Lưu components vào session_state
         st.session_state["components"] = self._components
         
-        # 1. Kiểm tra authentication (nếu có)
+        # 1. Kiểm tra authentication
         if "auth" in self._components:
             auth_block = self._components["auth"]
             if not auth_block.check_login():
                 auth_block.render_login_ui()
                 st.stop()
         
-        # 2. Render sidebar (nếu bật)
+        # 2. Render sidebar
         if self.config["sidebar"]:
             self._render_sidebar()
         
-        # 3. Load feature được chọn (hoặc default)
+        # 3. Load feature được chọn
         selected_feature = st.session_state.get("selected_feature")
         if not selected_feature and self.config.get("default_feature"):
             selected_feature = self.config["default_feature"]
@@ -142,8 +104,14 @@ class AppBuilder:
         return self
     
     def _render_sidebar(self):
-        """Render sidebar chung cho toàn app"""
+        """Render sidebar chung"""
         with st.sidebar:
+            # Header
+            st.markdown("# 🧠 Cognitive Weaver")
+            st.caption("*Meta-Blocks Architecture*")
+            
+            st.divider()
+            
             # Language selector
             if "i18n" in st.session_state:
                 st.session_state["i18n"].render_language_selector()
@@ -154,72 +122,100 @@ class AppBuilder:
             if "auth" in self._components:
                 user = st.session_state.get("current_user", "Guest")
                 is_admin = st.session_state.get("is_admin", False)
-                role_text = " (Admin)" if is_admin else ""
-                st.info(f"👤 {user}{role_text}")
+                role_badge = "🔑 Admin" if is_admin else "👤 User"
+                
+                st.info(f"{role_badge}\n**{user}**")
             
-            # Menu chọn feature
-            st.title("🗂️ MENU")
+            st.divider()
+            
+            # Menu
+            st.markdown("### 📂 MODULES")
             
             feature_list = self._components.get("features", [])
             if feature_list:
                 feature_names = [f["name"] for f in feature_list]
+                
+                # Default index
+                current = st.session_state.get("selected_feature", feature_names[0])
+                try:
+                    idx = feature_names.index(current)
+                except ValueError:
+                    idx = 0
+                
                 selected = st.radio(
                     "Chọn module:",
                     feature_names,
                     format_func=self._get_feature_label,
-                    index=feature_names.index(st.session_state.get("selected_feature", feature_names[0]))
+                    index=idx,
+                    label_visibility="collapsed"
                 )
+                
                 if selected != st.session_state.get("selected_feature"):
                     st.session_state["selected_feature"] = selected
                     st.rerun()
             
             st.divider()
             
-            # Logout
+            # Footer
             if st.button("🚪 Đăng xuất", type="secondary", use_container_width=True):
                 if "auth" in self._components:
-                    self._components["auth"].logout()  # Nếu auth_block có hàm logout
+                    self._components["auth"].logout()
                 st.session_state.clear()
                 st.rerun()
     
     def _get_feature_label(self, feature_name: str) -> str:
-        """Map tên feature → label hiển thị đẹp"""
+        """Map tên feature → label"""
         labels = {
             "weaver": "🧠 Cognitive Weaver",
-            "cfo":    "💰 CFO Controller"
-            # Thêm các module khác sau này ở đây
+            "history": "⏳ Nhật Ký",
+            "cfo": "💰 CFO Controller"
         }
         return labels.get(feature_name, feature_name.capitalize())
     
     def _load_feature(self, feature_name: str):
-        """Load động feature từ features/weaver hoặc features/cfo"""
+        """Load động feature"""
         try:
+            # Weaver
             if feature_name == "weaver":
                 from features.weaver import WeaverFeature
-                feature_instance = WeaverFeature(
+                
+                feature = WeaverFeature(
                     ai_engine=self._components.get("ai_engine"),
-                    embedding_engine=self._components.get("embedding_engine"),  # Cần có trong components
-                    kg_engine=self._components.get("kg_engine"),                # Cần có trong components
+                    embedding_engine=self._components.get("embedding_engine"),
                     i18n=self._components.get("i18n"),
                     config=self._components.get("config")
                 )
-                feature_instance.render()
-        
-            # CFO (nếu có sau này)
+                feature.render()
+            
+            # History
+            elif feature_name == "history":
+                from features.history_feature import HistoryFeature
+                
+                feature = HistoryFeature(
+                    ai_engine=self._components.get("ai_engine"),
+                    i18n=self._components.get("i18n"),
+                    config=self._components.get("config")
+                )
+                feature.render()
+            
+            # CFO (placeholder)
             elif feature_name == "cfo":
                 from features.cfo import CFOFeature
-                feature_instance = CFOFeature(
+                
+                feature = CFOFeature(
                     ai_engine=self._components.get("ai_engine"),
                     i18n=self._components.get("i18n"),
                     config=self._components.get("config")
                 )
-                feature_instance.render()
-        
+                feature.render()
+            
             else:
                 st.warning(f"Feature '{feature_name}' chưa được triển khai")
-    
-        except ImportError as ie:
-            st.error(f"Import lỗi: {str(ie)}")
-            st.info("Kiểm tra: folder features/weaver/ có tồn tại? Có file __init__.py với class WeaverFeature?")
+        
+        except ImportError as e:
+            st.error(f"❌ Import lỗi: {str(e)}")
+            st.info("Kiểm tra: folder features/ có file tương ứng?")
+        
         except Exception as e:
-            st.error(f"Lỗi render feature '{feature_name}': {str(e)}")
+            st.error(f"❌ Lỗi render feature '{feature_name}': {str(e)}")
+            st.exception(e)

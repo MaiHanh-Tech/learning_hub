@@ -6,6 +6,30 @@ No debug messages, proper i18n, CFO enabled
 import streamlit as st
 from core.app_builder import AppBuilder
 
+# DEBUG: Test Gemini
+
+try:
+    import google.generativeai as genai
+    
+    # Lấy key
+    key = st.secrets.get("api_keys", {}).get("gemini_api_key")
+    if not key:
+        key = st.secrets.get("gemini_api_key")
+    
+    if key:
+        genai.configure(api_key=key)
+        
+        # Test call
+        model = genai.GenerativeModel("gemini-2.0-flash-exp")
+        response = model.generate_content("Say hello in Vietnamese")
+        
+        st.sidebar.success(f"✅ Gemini OK: {response.text[:50]}")
+    else:
+        st.sidebar.error("❌ Gemini key not found in secrets")
+
+except Exception as e:
+    st.sidebar.error(f"❌ Gemini error: {str(e)}")
+
 
 def main():
     """

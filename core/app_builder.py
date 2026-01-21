@@ -1,3 +1,8 @@
+"""
+META-BLOCK: Application Builder (Fixed)
+Bỏ debug messages, fix i18n, add CFO support
+"""
+
 from typing import Dict, Any, Optional
 import streamlit as st
 
@@ -12,12 +17,6 @@ from engines.embedding_engine import EmbeddingEngine
 
 
 class AppBuilder:
-    """
-    Xây dựng App theo kiểu LEGO - Fluent Interface
-    
-    Updated: Thêm support cho History feature
-    """
-    
     def __init__(self):
         self._components: Dict[str, Any] = {}
         self.config = {
@@ -51,13 +50,13 @@ class AppBuilder:
             config=config
         )
         
-        # Auto-create embedding engine (cần cho Weaver)
+        # Auto-create embedding engine
         self._components["embedding_engine"] = EmbeddingEngine()
         
         return self
     
     def with_feature(self, feature_name: str, config: dict = None):
-        """Đăng ký một feature module"""
+        """Đăng ký feature"""
         if "features" not in self._components:
             self._components["features"] = []
         self._components["features"].append({
@@ -72,27 +71,26 @@ class AppBuilder:
         return self
     
     def with_default_feature(self, feature_name: str):
-        """Feature mặc định khi mới vào app"""
+        """Feature mặc định"""
         self.config["default_feature"] = feature_name
         return self
     
     def build(self):
-        """Lắp ráp và chạy ứng dụng"""
-        # Lưu components vào session_state
+        """Lắp ráp và chạy app"""
         st.session_state["components"] = self._components
         
-        # 1. Kiểm tra authentication
+        # 1. Authentication
         if "auth" in self._components:
             auth_block = self._components["auth"]
             if not auth_block.check_login():
                 auth_block.render_login_ui()
                 st.stop()
         
-        # 2. Render sidebar
+        # 2. Sidebar
         if self.config["sidebar"]:
             self._render_sidebar()
         
-        # 3. Load feature được chọn
+        # 3. Load feature
         selected_feature = st.session_state.get("selected_feature")
         if not selected_feature and self.config.get("default_feature"):
             selected_feature = self.config["default_feature"]
@@ -104,7 +102,7 @@ class AppBuilder:
         return self
     
     def _render_sidebar(self):
-        """Render sidebar chung"""
+        """Render sidebar"""
         with st.sidebar:
             # Header
             st.markdown("# 🧠 Cognitive Weaver")
@@ -135,7 +133,6 @@ class AppBuilder:
             if feature_list:
                 feature_names = [f["name"] for f in feature_list]
                 
-                # Default index
                 current = st.session_state.get("selected_feature", feature_names[0])
                 try:
                     idx = feature_names.index(current)
@@ -156,7 +153,7 @@ class AppBuilder:
             
             st.divider()
             
-            # Footer
+            # Logout
             if st.button("🚪 Đăng xuất", type="secondary", use_container_width=True):
                 if "auth" in self._components:
                     self._components["auth"].logout()
@@ -164,16 +161,15 @@ class AppBuilder:
                 st.rerun()
     
     def _get_feature_label(self, feature_name: str) -> str:
-        """Map tên feature → label"""
+        """Map feature name to label"""
         labels = {
             "weaver": "🧠 Cognitive Weaver",
-            "history": "⏳ Nhật Ký",
             "cfo": "💰 CFO Controller"
         }
         return labels.get(feature_name, feature_name.capitalize())
     
     def _load_feature(self, feature_name: str):
-        """Load động feature"""
+        """Load feature"""
         try:
             # Weaver
             if feature_name == "weaver":
@@ -187,20 +183,9 @@ class AppBuilder:
                 )
                 feature.render()
             
-            # History
-            elif feature_name == "history":
-                from features.history_feature import HistoryFeature
-                
-                feature = HistoryFeature(
-                    ai_engine=self._components.get("ai_engine"),
-                    i18n=self._components.get("i18n"),
-                    config=self._components.get("config")
-                )
-                feature.render()
-            
-            # CFO (placeholder)
+            # CFO
             elif feature_name == "cfo":
-                from features.cfo import CFOFeature
+                from features.cfo_feature import CFOFeature
                 
                 feature = CFOFeature(
                     ai_engine=self._components.get("ai_engine"),
@@ -218,4 +203,3 @@ class AppBuilder:
         
         except Exception as e:
             st.error(f"❌ Lỗi render feature '{feature_name}': {str(e)}")
-            st.exception(e)

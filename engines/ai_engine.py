@@ -1,6 +1,6 @@
 """
 META-BLOCK: AI Engine 
-Priority: Gemini Pro > DeepSeek > Grok
+Priority: Gemini Pro > Gemini Flash > DeepSeek
 """
 
 from typing import Optional, Callable
@@ -13,7 +13,6 @@ from enum import Enum
 class AIProvider(Enum):
     GEMINI = "gemini"
     DEEPSEEK = "deepseek"
-    GROK = "grok"
 
 
 @dataclass
@@ -103,18 +102,6 @@ class AIEngine:
         except Exception as e:
             pass
         
-        # Grok
-        try:
-            if "xai" in st.secrets and "api_key" in st.secrets["xai"]:
-                from openai import OpenAI
-                providers[AIProvider.GROK.value] = OpenAI(
-                    api_key=st.secrets["xai"]["api_key"],
-                    base_url="https://api.x.ai/v1",
-                    timeout=30
-                )
-        except Exception as e:
-            pass
-        
         return providers
     
     def generate(
@@ -127,27 +114,24 @@ class AIEngine:
         progress_callback: Optional[Callable] = None
     ) -> AIResponse:
         """
-        Generate AI response với auto fallback
+        Generate AI response với auto fallback: Gemini Pro → Flash → DeepSeek
         """
         
         # Priority order
         provider_order = [
             AIProvider.GEMINI.value,
-            AIProvider.DEEPSEEK.value,
-            AIProvider.GROK.value
+            AIProvider.DEEPSEEK.value
         ]
         
         last_error = None
         
         for provider in provider_order:
-            # Skip if not available
             if provider not in self.providers:
                 continue
             
             if not self.circuit_breaker.is_available(provider):
                 continue
             
-            # Update progress
             if progress_callback:
                 progress_callback(f"🤖 Calling {provider.upper()}...")
             
@@ -162,10 +146,6 @@ class AIEngine:
                 elif provider == AIProvider.DEEPSEEK.value:
                     content = self._call_deepseek(prompt, system_instruction, max_tokens, temperature)
                 
-                elif provider == AIProvider.GROK.value:
-                    content = self._call_grok(prompt, system_instruction, max_tokens, temperature)
-                
-                # Success
                 if content:
                     latency = time.time() - start_time
                     self.circuit_breaker.record_success(provider)
@@ -196,11 +176,8 @@ class AIEngine:
         )
     
     def _call_gemini(self, prompt: str, system_instruction: Optional[str], model_type: str) -> str:
-        """Call Gemini API"""
+        """Call Gemini API - thử pro trước, nếu fail thì fallback flash"""
         import google.generativeai as genai
-        
-        # Use flash model (more stable)
-        model_name = "gemini-2.0-flash-exp"
         
         generation_config = {
             "temperature": 0.7,
@@ -209,18 +186,38 @@ class AIEngine:
             "max_output_tokens": 8192,
         }
         
-        model = genai.GenerativeModel(
-            model_name=model_name,
-            generation_config=generation_config,
-            system_instruction=system_instruction
-        )
+        models_to_try = []
         
-        response = model.generate_content(prompt)
+        # Ưu tiên pro
+        if model_type.lower() == "pro":
+            models_to_try.append("gemini-2.5-pro")  # hoặc "gemini-pro" nếu alias vẫn hoạt động
+            models_to_try.append("gemini-2.0-pro")  # fallback pro khác nếu có
         
-        if response and response.text:
-            return response.text.strip()
+        # Luôn có flash làm fallback
+        models_to_try.append("gemini-2.0-flash-001")  # stable flash
+        models_to_try.append("gemini-2.5-flash")      # nếu 2.5 có
         
-        raise Exception("Gemini returned empty response")
+        last_gemini_error = None
+        
+        for model_name in models_to_try:
+            try:
+                model = genai.GenerativeModel(
+                    model_name=model_name,
+                    generation_config=generation_config,
+                    system_instruction=system_instruction
+                )
+                
+                response = model.generate_content(prompt)
+                
+                if response and response.text:
+                    return response.text.strip()
+            
+            except Exception as e:
+                last_gemini_error = str(e)
+                continue  # thử model tiếp theo
+        
+        # Nếu tất cả model Gemini fail
+        raise Exception(f"Gemini failed all models. Last error: {last_gemini_error}")
     
     def _call_deepseek(
         self,
@@ -239,30 +236,6 @@ class AIEngine:
         
         response = client.chat.completions.create(
             model="deepseek-chat",
-            messages=messages,
-            max_tokens=max_tokens,
-            temperature=temperature
-        )
-        
-        return response.choices[0].message.content.strip()
-    
-    def _call_grok(
-        self,
-        prompt: str,
-        system_instruction: Optional[str],
-        max_tokens: int,
-        temperature: float
-    ) -> str:
-        """Call Grok API"""
-        client = self.providers[AIProvider.GROK.value]
-        
-        messages = []
-        if system_instruction:
-            messages.append({"role": "system", "content": system_instruction})
-        messages.append({"role": "user", "content": prompt})
-        
-        response = client.chat.completions.create(
-            model="grok-beta",
             messages=messages,
             max_tokens=max_tokens,
             temperature=temperature

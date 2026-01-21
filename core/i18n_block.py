@@ -1,26 +1,15 @@
 """
-META-BLOCK: I18n (Internationalization)
-Chức năng: Quản lý đa ngôn ngữ TOÀN HỆ THỐNG
+META-BLOCK: I18n 
 """
 
 import streamlit as st
 from typing import Dict, List
 
+
 class I18nBlock:
-    """
-    [Inference] Block này tập trung hóa việc dịch UI
-    
-    Lợi ích:
-    - Mọi module dùng chung 1 nguồn translation
-    - Thêm ngôn ngữ mới chỉ cần sửa 1 file
-    - AI dễ dàng generate translation dict
-    """
-    
     def __init__(self, languages: List[str], default: str = "vi"):
         self.languages = languages
         self.default = default
-        
-        # Load translation dictionaries
         self.translations = self._load_translations()
         
         # Init session state
@@ -28,15 +17,7 @@ class I18nBlock:
             st.session_state.current_language = default
     
     def _load_translations(self) -> Dict[str, Dict[str, str]]:
-        """
-        Load tất cả translations
-        
-        Structure:
-        {
-            "vi": {"header": "Tiêu đề", "button": "Nút bấm"},
-            "en": {"header": "Header", "button": "Button"}
-        }
-        """
+        """Load all translations"""
         return {
             "vi": self._get_vietnamese_dict(),
             "en": self._get_english_dict(),
@@ -44,7 +25,7 @@ class I18nBlock:
         }
     
     def _get_vietnamese_dict(self) -> Dict[str, str]:
-        """Vietnamese translations (TOÀN HỆ THỐNG)"""
+        """Vietnamese translations"""
         return {
             # Common
             "logout": "Đăng xuất",
@@ -54,18 +35,21 @@ class I18nBlock:
             
             # Weaver Module
             "weaver_title": "🧠 Cognitive Weaver",
-            "weaver_rag": "📚 Phân Tích Sách",
-            "weaver_translator": "✍️ Dịch Giả",
-            "weaver_debate": "🗣️ Tranh Biện",
-            "weaver_voice": "🎙️ Phòng Thu AI",
-            "weaver_history": "⏳ Nhật Ký",
+            "tab1": "📚 Phân Tích Sách",
+            "tab2": "🗣️ Tranh Biện",
+            "tab3": "⏳ Nhật Ký",
+            
+            "t1_up_doc": "Tải tài liệu (PDF/Docx)",
+            "t1_btn": "🚀 PHÂN TÍCH NGAY",
+            "t3_persona_label": "Chọn Đối Thủ:",
+            "t3_input": "Nhập chủ đề tranh luận...",
+            "t3_clear": "🗑️ Xóa Chat",
             
             # CFO Module
             "cfo_title": "💰 CFO Controller",
             "cfo_kpi": "📊 KPIs",
             "cfo_analysis": "📉 Phân Tích",
-            "cfo_risk": "🕵️ Rủi Ro",
-            "cfo_forecast": "🔮 Dự Báo"
+            "cfo_risk": "🕵️ Rủi Ro"
         }
     
     def _get_english_dict(self) -> Dict[str, str]:
@@ -77,17 +61,20 @@ class I18nBlock:
             "success": "Success",
             
             "weaver_title": "🧠 Cognitive Weaver",
-            "weaver_rag": "📚 Book Analysis",
-            "weaver_translator": "✍️ Translator",
-            "weaver_debate": "🗣️ Debate Arena",
-            "weaver_voice": "🎙️ AI Studio",
-            "weaver_history": "⏳ History",
+            "tab1": "📚 Book Analysis",
+            "tab2": "🗣️ Debate Arena",
+            "tab3": "⏳ History",
+            
+            "t1_up_doc": "Upload Document (PDF/Docx)",
+            "t1_btn": "🚀 ANALYZE NOW",
+            "t3_persona_label": "Choose Opponent:",
+            "t3_input": "Enter debate topic...",
+            "t3_clear": "🗑️ Clear Chat",
             
             "cfo_title": "💰 CFO Controller",
             "cfo_kpi": "📊 KPIs",
             "cfo_analysis": "📉 Analysis",
-            "cfo_risk": "🕵️ Risk Detection",
-            "cfo_forecast": "🔮 Forecast"
+            "cfo_risk": "🕵️ Risk Detection"
         }
     
     def _get_chinese_dict(self) -> Dict[str, str]:
@@ -99,11 +86,20 @@ class I18nBlock:
             "success": "成功",
             
             "weaver_title": "🧠 认知编织者",
-            "weaver_rag": "📚 书籍分析",
-            "weaver_translator": "✍️ 翻译",
-            "weaver_debate": "🗣️ 辩论场",
-            "weaver_voice": "🎙️ AI 录音室",
-            "weaver_history": "⏳ 历史记录"
+            "tab1": "📚 书籍分析",
+            "tab2": "🗣️ 辩论场",
+            "tab3": "⏳ 历史记录",
+            
+            "t1_up_doc": "上传文档 (PDF/Docx)",
+            "t1_btn": "🚀 立即分析",
+            "t3_persona_label": "选择对手:",
+            "t3_input": "输入辩论主题...",
+            "t3_clear": "🗑️ 清除聊天",
+            
+            "cfo_title": "💰 CFO 控制器",
+            "cfo_kpi": "📊 关键指标",
+            "cfo_analysis": "📉 分析",
+            "cfo_risk": "🕵️ 风险检测"
         }
     
     def t(self, key: str, fallback: str = None) -> str:
@@ -123,18 +119,31 @@ class I18nBlock:
     def render_language_selector(self):
         """Render language selector widget"""
         language_map = {
-            "vi": "Tiếng Việt",
-            "en": "English",
-            "zh": "中文"
+            "vi": "🇻🇳 Tiếng Việt",
+            "en": "🇬🇧 English",
+            "zh": "🇨🇳 中文"
         }
         
-        selected = st.selectbox(
-            "🌐 Language",
-            self.languages,
-            format_func=lambda x: language_map.get(x, x),
-            index=self.languages.index(st.session_state.current_language)
+        # Mapping from display name to code
+        display_to_code = {v: k for k, v in language_map.items()}
+        code_to_display = language_map
+        
+        # Current selection
+        current_display = code_to_display.get(
+            st.session_state.current_language,
+            language_map["vi"]
         )
         
-        if selected != st.session_state.current_language:
-            st.session_state.current_language = selected
+        selected_display = st.selectbox(
+            "🌐 Language",
+            [language_map[lang] for lang in self.languages],
+            index=[language_map[lang] for lang in self.languages].index(current_display),
+            key="i18n_language_selector"
+        )
+        
+        # Convert back to code
+        selected_code = display_to_code[selected_display]
+        
+        if selected_code != st.session_state.current_language:
+            st.session_state.current_language = selected_code
             st.rerun()

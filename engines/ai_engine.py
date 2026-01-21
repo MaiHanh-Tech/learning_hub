@@ -1,6 +1,6 @@
 """
 META-BLOCK: AI Engine 
-Priority: Gemini Pro > Gemini Flash > DeepSeek
+Priority: OpenRouter (Gemini free model) > DeepSeek
 """
 
 from typing import Optional, Callable
@@ -11,7 +11,7 @@ from enum import Enum
 
 
 class AIProvider(Enum):
-    GEMINI = "gemini"
+    OPENROUTER = "openrouter"
     DEEPSEEK = "deepseek"
 
 
@@ -38,10 +38,8 @@ class CircuitBreaker:
         }
     
     def is_available(self, provider: str) -> bool:
-        """Check if provider is available"""
         status = self.provider_status.get(provider, {})
         
-        # Reset if timeout passed
         if status.get("last_failure"):
             elapsed = time.time() - status["last_failure"]
             if elapsed > self.timeout:
@@ -52,45 +50,39 @@ class CircuitBreaker:
         return status.get("failures", 0) < self.failure_threshold
     
     def record_failure(self, provider: str):
-        """Record a failure"""
         if provider in self.provider_status:
             self.provider_status[provider]["failures"] += 1
             self.provider_status[provider]["last_failure"] = time.time()
     
     def record_success(self, provider: str):
-        """Record a success"""
         if provider in self.provider_status:
             self.provider_status[provider]["failures"] = 0
             self.provider_status[provider]["last_failure"] = None
 
 
 class AIEngine:
-    def __init__(self, default_model: str = "gemini-pro", config=None):
+    def __init__(self, default_model: str = "google/gemini-2.0-flash-exp:free", config=None):
         self.default_model = default_model
         self.config = config or {}
         self.circuit_breaker = CircuitBreaker()
         self.providers = self._init_providers()
     
     def _init_providers(self) -> dict:
-        """Initialize AI providers"""
         providers = {}
         
-        # Gemini
+        # OpenRouter
         try:
-            gemini_key = None
-            if "api_keys" in st.secrets and "gemini_api_key" in st.secrets["api_keys"]:
-                gemini_key = st.secrets["api_keys"]["gemini_api_key"]
-            elif "gemini_api_key" in st.secrets:
-                gemini_key = st.secrets["gemini_api_key"]
-            
-            if gemini_key:
-                import google.generativeai as genai
-                genai.configure(api_key=gemini_key)
-                providers[AIProvider.GEMINI.value] = "ready"
-        except Exception as e:
+            if "openrouter" in st.secrets and "api_key" in st.secrets["openrouter"]:
+                from openai import OpenAI
+                providers[AIProvider.OPENROUTER.value] = OpenAI(
+                    api_key=st.secrets["openrouter"]["api_key"],
+                    base_url="https://openrouter.ai/api/v1",
+                    timeout=60  # tăng timeout vì free model đôi khi chậm
+                )
+        except Exception:
             pass
         
-        # DeepSeek
+        # DeepSeek (fallback)
         try:
             if "deepseek" in st.secrets and "api_key" in st.secrets["deepseek"]:
                 from openai import OpenAI
@@ -99,7 +91,7 @@ class AIEngine:
                     base_url="https://api.deepseek.com/v1",
                     timeout=30
                 )
-        except Exception as e:
+        except Exception:
             pass
         
         return providers
@@ -108,18 +100,17 @@ class AIEngine:
         self,
         prompt: str,
         system_instruction: Optional[str] = None,
-        model_type: str = "pro",
+        model_type: str = "flash",  # không còn pro/flash riêng, giờ dùng model name trực tiếp
         max_tokens: int = 4000,
         temperature: float = 0.7,
         progress_callback: Optional[Callable] = None
     ) -> AIResponse:
         """
-        Generate AI response với auto fallback: Gemini Pro → Flash → DeepSeek
+        Generate AI response với priority: OpenRouter (Gemini free) → DeepSeek
         """
         
-        # Priority order
         provider_order = [
-            AIProvider.GEMINI.value,
+            AIProvider.OPENROUTER.value,
             AIProvider.DEEPSEEK.value
         ]
         
@@ -140,8 +131,8 @@ class AIEngine:
             try:
                 content = None
                 
-                if provider == AIProvider.GEMINI.value:
-                    content = self._call_gemini(prompt, system_instruction, model_type)
+                if provider == AIProvider.OPENROUTER.value:
+                    content = self._call_openrouter(prompt, system_instruction, max_tokens, temperature)
                 
                 elif provider == AIProvider.DEEPSEEK.value:
                     content = self._call_deepseek(prompt, system_instruction, max_tokens, temperature)
@@ -162,8 +153,7 @@ class AIEngine:
                 self.circuit_breaker.record_failure(provider)
                 continue
         
-        # All providers failed
-        error_msg = f"⚠️ Tất cả AI providers không khả dụng."
+        error_msg = "⚠️ Tất cả AI providers không khả dụng."
         if last_error:
             error_msg += f"\nLỗi cuối: {last_error}"
         
@@ -175,49 +165,34 @@ class AIEngine:
             error=error_msg
         )
     
-    def _call_gemini(self, prompt: str, system_instruction: Optional[str], model_type: str) -> str:
-        """Call Gemini API - thử pro trước, nếu fail thì fallback flash"""
-        import google.generativeai as genai
+    def _call_openrouter(
+        self,
+        prompt: str,
+        system_instruction: Optional[str],
+        max_tokens: int,
+        temperature: float
+    ) -> str:
+        """Call OpenRouter API với Gemini free model"""
+        client = self.providers[AIProvider.OPENROUTER.value]
         
-        generation_config = {
-            "temperature": 0.7,
-            "top_p": 0.95,
-            "top_k": 40,
-            "max_output_tokens": 8192,
-        }
+        messages = []
+        if system_instruction:
+            messages.append({"role": "system", "content": system_instruction})
+        messages.append({"role": "user", "content": prompt})
         
-        models_to_try = []
+        response = client.chat.completions.create(
+            model="google/gemini-2.0-flash-exp:free",  # Gemini free variant (cập nhật nếu deprecate)
+            # Nếu muốn thử model free khác: "mistralai/devstral-2512:free" hoặc "xiaomi/mimo-v2-flash:free"
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            extra_headers={
+                "HTTP-Referer": "https://your-app-url.com",  # optional, để OpenRouter track
+                "X-Title": "Streamlit AI Engine"
+            }
+        )
         
-        # Ưu tiên pro
-        if model_type.lower() == "pro":
-            models_to_try.append("gemini-2.5-pro")  # hoặc "gemini-pro" nếu alias vẫn hoạt động
-            models_to_try.append("gemini-2.0-pro")  # fallback pro khác nếu có
-        
-        # Luôn có flash làm fallback
-        models_to_try.append("gemini-2.0-flash-001")  # stable flash
-        models_to_try.append("gemini-2.5-flash")      # nếu 2.5 có
-        
-        last_gemini_error = None
-        
-        for model_name in models_to_try:
-            try:
-                model = genai.GenerativeModel(
-                    model_name=model_name,
-                    generation_config=generation_config,
-                    system_instruction=system_instruction
-                )
-                
-                response = model.generate_content(prompt)
-                
-                if response and response.text:
-                    return response.text.strip()
-            
-            except Exception as e:
-                last_gemini_error = str(e)
-                continue  # thử model tiếp theo
-        
-        # Nếu tất cả model Gemini fail
-        raise Exception(f"Gemini failed all models. Last error: {last_gemini_error}")
+        return response.choices[0].message.content.strip()
     
     def _call_deepseek(
         self,
@@ -226,7 +201,7 @@ class AIEngine:
         max_tokens: int,
         temperature: float
     ) -> str:
-        """Call DeepSeek API"""
+        """Call DeepSeek API (fallback)"""
         client = self.providers[AIProvider.DEEPSEEK.value]
         
         messages = []

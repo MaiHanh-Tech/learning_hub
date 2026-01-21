@@ -1,6 +1,5 @@
 """
-META-BLOCK: Application Builder (Fixed)
-Bỏ debug messages, fix i18n, add CFO support
+META-BLOCK: Application Builder 
 """
 
 from typing import Dict, Any, Optional
@@ -50,8 +49,12 @@ class AppBuilder:
             config=config
         )
         
-        # Auto-create embedding engine
-        self._components["embedding_engine"] = EmbeddingEngine()
+        # Auto-create embedding engine (optional - won't crash if fail)
+        try:
+            self._components["embedding_engine"] = EmbeddingEngine()
+        except Exception:
+            # Embedding not critical - app can run without it
+            self._components["embedding_engine"] = None
         
         return self
     

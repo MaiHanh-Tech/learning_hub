@@ -1,6 +1,6 @@
 """
-META-BLOCK: AI Engine
-Nguyên tắc: Circuit Breaker + Fallback Chain
+META-BLOCK: AI Engine 
+Priority: Gemini Pro > DeepSeek > Grok
 """
 
 from typing import Optional, Callable
@@ -9,10 +9,12 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 
+
 class AIProvider(Enum):
     GEMINI = "gemini"
     DEEPSEEK = "deepseek"
     GROK = "grok"
+
 
 @dataclass
 class AIResponse:
@@ -24,14 +26,9 @@ class AIResponse:
     tokens: int = 0
     error: Optional[str] = None
 
+
 class CircuitBreaker:
-    """
-    Circuit Breaker Pattern implementation
-    
-    Nguyên tắc (từ *Antifragile*):
-    - Không retry provider đã "chết" → Tránh lãng phí thời gian
-    - Tự động recovery sau timeout → Self-healing
-    """
+    """Circuit Breaker Pattern"""
     
     def __init__(self, failure_threshold: int = 3, timeout: int = 300):
         self.failure_threshold = failure_threshold
@@ -62,29 +59,23 @@ class CircuitBreaker:
             self.provider_status[provider]["last_failure"] = time.time()
     
     def record_success(self, provider: str):
-        """Record a success (reset counter)"""
+        """Record a success"""
         if provider in self.provider_status:
             self.provider_status[provider]["failures"] = 0
             self.provider_status[provider]["last_failure"] = None
 
+
 class AIEngine:
     def __init__(self, default_model: str = "gemini-pro", config=None):
         self.default_model = default_model
-        self.config = config or {} 
-        
-        
+        self.config = config or {}
         self.circuit_breaker = CircuitBreaker()
         self.providers = self._init_providers()
-        
-        
-        # Status display
-        self._show_status()
     
     def _init_providers(self) -> dict:
+        """Initialize AI providers"""
         providers = {}
-    
-        st.caption("--- AI Providers Debug Start ---")
-    
+        
         # Gemini
         try:
             gemini_key = None
@@ -92,17 +83,14 @@ class AIEngine:
                 gemini_key = st.secrets["api_keys"]["gemini_api_key"]
             elif "gemini_api_key" in st.secrets:
                 gemini_key = st.secrets["gemini_api_key"]
-        
+            
             if gemini_key:
                 import google.generativeai as genai
                 genai.configure(api_key=gemini_key)
                 providers[AIProvider.GEMINI.value] = "ready"
-                st.caption("Gemini: READY ✅")
-            else:
-                st.caption("Gemini: MISSING KEY ❌")
         except Exception as e:
-            st.caption(f"Gemini: ERROR - {str(e)}")
-    
+            pass
+        
         # DeepSeek
         try:
             if "deepseek" in st.secrets and "api_key" in st.secrets["deepseek"]:
@@ -112,12 +100,9 @@ class AIEngine:
                     base_url="https://api.deepseek.com/v1",
                     timeout=30
                 )
-                st.caption("DeepSeek: READY ✅")
-            else:
-                st.caption("DeepSeek: MISSING KEY ❌")
         except Exception as e:
-            st.caption(f"DeepSeek: ERROR - {str(e)}")
-    
+            pass
+        
         # Grok
         try:
             if "xai" in st.secrets and "api_key" in st.secrets["xai"]:
@@ -127,33 +112,10 @@ class AIEngine:
                     base_url="https://api.x.ai/v1",
                     timeout=30
                 )
-                st.caption("Grok: READY ✅")
-            else:
-                st.caption("Grok: MISSING KEY ❌")
         except Exception as e:
-            st.caption(f"Grok: ERROR - {str(e)}")
-    
-        st.caption("--- AI Providers Debug End ---")
-    
+            pass
+        
         return providers
-    
-    def _show_status(self):
-        """Show AI engine status"""
-        status_icons = {
-            AIProvider.GEMINI.value: "🟡",
-            AIProvider.DEEPSEEK.value: "🟣",
-            AIProvider.GROK.value: "🟢"
-        }
-        
-        available = [
-            f"{status_icons.get(p, '⚫')} {p.upper()}"
-            for p in self.providers.keys()
-        ]
-        
-        if available:
-            st.caption(f"**AI Engine:** {' → '.join(available)}")
-        else:
-            st.error("🔴 No AI providers available")
     
     def generate(
         self,
@@ -166,28 +128,19 @@ class AIEngine:
     ) -> AIResponse:
         """
         Generate AI response với auto fallback
-        
-        Args:
-            prompt: User prompt
-            system_instruction: System instruction
-            model_type: "flash" hoặc "pro"
-            max_tokens: Max output tokens
-            temperature: Temperature (0-1)
-            progress_callback: Function để update progress bar
-        
-        Returns:
-            AIResponse object
         """
         
-        # Priority order: Gemini → DeepSeek → Grok
+        # Priority order
         provider_order = [
             AIProvider.GEMINI.value,
             AIProvider.DEEPSEEK.value,
             AIProvider.GROK.value
         ]
         
+        last_error = None
+        
         for provider in provider_order:
-            # Skip if not available or circuit broken
+            # Skip if not available
             if provider not in self.providers:
                 continue
             
@@ -198,18 +151,19 @@ class AIEngine:
             if progress_callback:
                 progress_callback(f"🤖 Calling {provider.upper()}...")
             
-            # Try calling provider
             start_time = time.time()
             
             try:
+                content = None
+                
                 if provider == AIProvider.GEMINI.value:
                     content = self._call_gemini(prompt, system_instruction, model_type)
                 
                 elif provider == AIProvider.DEEPSEEK.value:
-                    content = self._call_deepseek(prompt, system_instruction, max_tokens)
+                    content = self._call_deepseek(prompt, system_instruction, max_tokens, temperature)
                 
                 elif provider == AIProvider.GROK.value:
-                    content = self._call_grok(prompt, system_instruction, max_tokens)
+                    content = self._call_grok(prompt, system_instruction, max_tokens, temperature)
                 
                 # Success
                 if content:
@@ -224,35 +178,40 @@ class AIEngine:
                     )
             
             except Exception as e:
+                last_error = str(e)
                 self.circuit_breaker.record_failure(provider)
-                
-                # Log error (optional)
-                try:
-                    from utils.logger import AppLogger
-                    logger = AppLogger()
-                    logger.log_error(f"AI_{provider}", str(e), "")
-                except:
-                    pass
-                
                 continue
         
         # All providers failed
+        error_msg = f"⚠️ Tất cả AI providers không khả dụng."
+        if last_error:
+            error_msg += f"\nLỗi cuối: {last_error}"
+        
         return AIResponse(
             success=False,
             content="",
             provider="none",
             latency=0,
-            error="⚠️ Tất cả AI providers tạm thời không khả dụng. Thử lại sau!"
+            error=error_msg
         )
     
-    def _call_gemini(self, prompt: str, system_instruction: str, model_type: str) -> str:
+    def _call_gemini(self, prompt: str, system_instruction: Optional[str], model_type: str) -> str:
         """Call Gemini API"""
         import google.generativeai as genai
         
-        model_name = "gemini-2.5-flash" if model_type == "flash" else "gemini-2.5-pro"
+        # Use flash model (more stable)
+        model_name = "gemini-2.0-flash-exp"
+        
+        generation_config = {
+            "temperature": 0.7,
+            "top_p": 0.95,
+            "top_k": 40,
+            "max_output_tokens": 8192,
+        }
         
         model = genai.GenerativeModel(
             model_name=model_name,
+            generation_config=generation_config,
             system_instruction=system_instruction
         )
         
@@ -263,7 +222,13 @@ class AIEngine:
         
         raise Exception("Gemini returned empty response")
     
-    def _call_deepseek(self, prompt: str, system_instruction: str, max_tokens: int) -> str:
+    def _call_deepseek(
+        self,
+        prompt: str,
+        system_instruction: Optional[str],
+        max_tokens: int,
+        temperature: float
+    ) -> str:
         """Call DeepSeek API"""
         client = self.providers[AIProvider.DEEPSEEK.value]
         
@@ -276,12 +241,18 @@ class AIEngine:
             model="deepseek-chat",
             messages=messages,
             max_tokens=max_tokens,
-            temperature=0.7
+            temperature=temperature
         )
         
         return response.choices[0].message.content.strip()
     
-    def _call_grok(self, prompt: str, system_instruction: str, max_tokens: int) -> str:
+    def _call_grok(
+        self,
+        prompt: str,
+        system_instruction: Optional[str],
+        max_tokens: int,
+        temperature: float
+    ) -> str:
         """Call Grok API"""
         client = self.providers[AIProvider.GROK.value]
         
@@ -294,32 +265,7 @@ class AIEngine:
             model="grok-beta",
             messages=messages,
             max_tokens=max_tokens,
-            temperature=0.7
+            temperature=temperature
         )
         
         return response.choices[0].message.content.strip()
-    
-    @staticmethod
-    @st.cache_data(ttl=3600)
-    def analyze_document(text: str, instruction: str) -> str:
-        """
-        Static method cho RAG (có cache)
-        
-        [Inference] Dùng cache để tránh gọi API lại khi analyze cùng 1 doc
-        """
-        try:
-            import google.generativeai as genai
-            
-            if "api_keys" in st.secrets and "gemini_api_key" in st.secrets["api_keys"]:
-                genai.configure(api_key=st.secrets["api_keys"]["gemini_api_key"])
-                model = genai.GenerativeModel("gemini-2.5-flash")
-                
-                response = model.generate_content(f"{instruction}\n\n{text[:150000]}")
-                
-                if response and response.text:
-                    return response.text.strip()
-            
-            return "❌ Gemini API không khả dụng"
-        
-        except Exception as e:
-            return f"❌ Lỗi: {str(e)}"

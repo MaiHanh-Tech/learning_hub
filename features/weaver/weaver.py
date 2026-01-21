@@ -90,7 +90,7 @@ class WeaverFeature:
         
         uploaded_files = st.file_uploader(
             self.t("t1_up_doc"),
-            type=["pdf", "docx", "txt"],
+            type=["pdf", "docx", "txt", "xlsx", "md"],
             accept_multiple_files=True,
             key="weaver_rag_files"
         )
@@ -298,7 +298,7 @@ CHỦ ĐỀ TRANH LUẬN: {topic}
 
 NHIỆM VỤ (Vòng 1 - Khai mạc):
 Bạn là {p_name}. Hãy đưa ra quan điểm mở đầu của mình về chủ đề này.
-Nêu rõ lập trường và 2-3 lý lẽ chính (dưới 200 từ).
+Nêu rõ lập trường và 2-3 lý lẽ chính (dưới 100 từ).
 """
                             else:
                                 p_prompt = f"""
@@ -312,7 +312,7 @@ Bạn là {p_name}. Hãy:
 1. Chỉ ra điểm yếu trong lập luận của đối thủ
 2. Củng cố quan điểm của mình
 3. Đưa ra thêm 1 ví dụ minh họa
-(Dưới 200 từ, súc tích)
+(Dưới 100 từ, súc tích)
 """
                             
                             # Call AI (Ưu tiên Gemini Pro)

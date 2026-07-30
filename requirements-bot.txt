@@ -1,0 +1,7 @@
+# requirements-bot.txt — CHỈ cho bot.py (Telegram bot, chạy tách biệt khỏi
+# app Streamlit chính, ví dụ deploy riêng trên Render/Railway).
+# Cài bằng: pip install -r requirements-bot.txt
+# Chạy bằng: python bot.py
+
+google-generativeai
+python-telegram-bot

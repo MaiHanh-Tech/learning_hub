@@ -1,38 +1,45 @@
-# --- Core & UI ---
+# requirements.txt — CHỈ cho app Streamlit chính (app.py)
+# bot.py (Telegram bot) chạy tách biệt, xem requirements-bot.txt riêng.
+#
+# ✅ Đã dọn: bỏ groq, pydantic-ai, beautifulsoup4, markdown, langdetect,
+# streamlit-mic-recorder, gspread, oauth2client, google-auth — 9 gói này
+# có trong bản cũ nhưng KHÔNG được import ở bất kỳ đâu trong code (đã
+# grep kiểm tra toàn bộ). Giữ lại làm app nặng hơn, build lâu hơn không
+# cần thiết, đặc biệt trên các nền tảng deploy giới hạn RAM.
+
+# ===== Web framework =====
 streamlit
+
+# ===== AI providers (Gemini / DeepSeek + Grok qua OpenAI-compatible API) =====
+google-generativeai
+openai
+
+# ===== Backend / DB =====
+supabase
+
+# ===== Data & ML =====
 pandas
 numpy
 scikit-learn
-plotly
-markdown
-
-# --- File & Data Processing ---
-beautifulsoup4
-python-docx
-pypdf
-openpyxl
-pypinyin
-jieba
-langdetect
-gspread
-oauth2client
-google-auth
-
-# --- AI & LLM APIs ---
-google-generativeai
-openai
-groq
-supabase
-pydantic-ai
-
-# --- Voice & Multimedia ---
-edge-tts
-streamlit-mic-recorder
-
-# --- Knowledge Graph ---
-networkx
-streamlit-agraph
-
-# --- Heavy Libraries (Để cuối cùng) ---
-# sentence-transformers tự động cài torch bản phù hợp
+torch
 sentence-transformers
+networkx
+
+# ===== Cấu trúc dữ liệu / validate output AI =====
+pydantic
+
+# ===== Xử lý file & tài liệu =====
+pypdf
+python-docx
+openpyxl
+
+# ===== Xử lý ngôn ngữ (dịch thuật tiếng Trung) =====
+jieba
+pypinyin
+
+# ===== Giọng nói =====
+edge-tts
+
+# ===== Trực quan hoá =====
+plotly
+streamlit-agraph

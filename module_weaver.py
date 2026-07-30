@@ -1,0 +1,723 @@
+import streamlit as st
+import pandas as pd
+import numpy as np
+from datetime import datetime
+from sklearn.metrics.pairwise import cosine_similarity
+import time
+import json
+
+# Local imports
+from services.blocks.file_processor import doc_file
+from services.blocks.embedding_engine import load_encoder
+
+# ✅ SỬA: Import đầy đủ từ rag_orchestrator
+# (Bỏ create_personal_rag: PersonalRAG là tính năng đã xây xong trong
+#  services/blocks/personal_rag_system.py nhưng chưa được nối vào UI nào —
+#  xem ghi chú cuối module để biết cách bật lại khi cần.)
+from services.blocks.rag_orchestrator import (
+    analyze_document_streamlit, 
+    compute_similarity_with_excel, 
+    store_history, 
+    init_knowledge_universe, 
+    tai_lich_su,
+    get_translation_orchestrator,
+    build_retrieval_context,
+)
+
+# KG module cho upgrade
+from services.blocks import knowledge_graph_v2 as kg_module
+
+# Core engines
+from ai_core import AI_Core
+from voice_block import Voice_Engine
+from prompts import DEBATE_PERSONAS, BOOK_ANALYSIS_PROMPT
+
+# Optional supabase import (don't fail app if missing)
+try:
+    from supabase import create_client, Client
+except ImportError:
+    pass
+
+# ✅ THÊM: MAPPING NGÔN NGỮ
+LANG_MAP = {
+    "Tiếng Việt": "vi",
+    "English": "en", 
+    "中文": "zh"
+}
+
+# TRANSLATIONS / UI TEXT
+TRANS = {
+    "vi": {
+        "lang_select": "Ngôn ngữ / Language / 语言",
+        "tab1": "📚 Phân Tích Sách",
+        "tab2": "✏️ Dịch Giả",
+        "tab3": "🗣️ Tranh Biện",
+        "tab4": "🎙️ Phòng Thu AI",
+        "tab5": "⏳ Nhật Ký",
+        "t1_header": "Trợ lý Nghiên cứu & Knowledge Graph",
+        "t1_up_excel": "1. Kết nối Kho Sách (Excel)",
+        "t1_up_doc": "2. Tài liệu mới (PDF/Docx)",
+        "t1_btn": "🚀 PHÂN TÍCH NGAY",
+        "t1_analyzing": "Đang phân tích {name}...",
+        "t1_connect_ok": "✅ Đã kết nối {n} cuốn sách.",
+        "t1_graph_title": "🪐 Vũ trụ Sách",
+        "t1_seed_books": "✅ Đã tải {n} sách tinh hoa vào Knowledge Graph (18 sách bao trùm 4 tầng triết học)",
+        "t2_header": "Dịch Thuật Đa Chiều",
+        "t2_input": "Nhập văn bản cần dịch:",
+        "t2_target": "Dịch sang:",
+        "t2_style": "Phong cách:",
+        "t2_btn": "✏️ Dịch Ngay",
+        "t3_header": "Đấu Trường Tư Duy",
+        "t3_persona_label": "Chọn Đối Thủ:",
+        "t3_input": "Nhập chủ đề tranh luận...",
+        "t3_clear": "🗑️ Xóa Chat",
+        "t4_header": "🎙️ Phòng Thu AI Đa Ngôn Ngữ",
+        "t4_voice": "Chọn Giọng:",
+        "t4_speed": "Tốc độ:",
+        "t4_btn": "🔊 TẠO AUDIO",
+        "t5_header": "Nhật Ký & Lịch Sử",
+        "t5_refresh": "🔄 Tải lại Lịch sử",
+        "t5_empty": "Chưa có dữ liệu lịch sử.",
+    },
+    "en": {
+        "lang_select": "Language",
+        "tab1": "📚 Book Analysis",
+        "tab2": "✏️ Translator",
+        "tab3": "🗣️ Debater",
+        "tab4": "🎙️ AI Studio",
+        "tab5": "⏳ History",
+        "t1_header": "Research Assistant & Knowledge Graph",
+        "t1_up_excel": "1. Connect Book Database (Excel)",
+        "t1_up_doc": "2. New Documents (PDF/Docx)",
+        "t1_btn": "🚀 ANALYZE NOW",
+        "t1_analyzing": "Analyzing {name}...",
+        "t1_connect_ok": "✅ Connected {n} books.",
+        "t1_graph_title": "🪐 Book Universe",
+        "t1_seed_books": "✅ Loaded {n} foundational books into Knowledge Graph (18 books covering 4 philosophy layers)",
+        "t2_header": "Multidimensional Translator",
+        "t2_input": "Enter text to translate:",
+        "t2_target": "Translate to:",
+        "t2_style": "Style:",
+        "t2_btn": "✏️ Translate",
+        "t3_header": "Thinking Arena",
+        "t3_persona_label": "Choose Opponent:",
+        "t3_input": "Enter debate topic...",
+        "t3_clear": "🗑️ Clear Chat",
+        "t4_header": "🎙️ Multilingual AI Studio",
+        "t4_voice": "Select Voice:",
+        "t4_speed": "Speed:",
+        "t4_btn": "🔊 GENERATE AUDIO",
+        "t5_header": "Logs & History",
+        "t5_refresh": "🔄 Refresh History",
+        "t5_empty": "No history data found.",
+    },
+    "zh": {
+        "lang_select": "语言",
+        "tab1": "📚 书籍分析",
+        "tab2": "✏️ 翻译专家",
+        "tab3": "🗣️ 辩论场",
+        "tab4": "🎙️ AI 录音室",
+        "tab5": "⏳ 历史记录",
+        "t1_header": "研究助手 & 知识图谱",
+        "t1_up_excel": "1. 连接书库 (Excel)",
+        "t1_up_doc": "2. 上传新文档 (PDF/Docx)",
+        "t1_btn": "🚀 立即分析",
+        "t1_analyzing": "正在分析 {name}...",
+        "t1_connect_ok": "✅ 已连接 {n} 本书。",
+        "t1_graph_title": "🪐 书籍宇宙",
+        "t1_seed_books": "✅ 已加载 {n} 本精华书籍到知识图谱 (18本书覆盖4层哲学)",
+        "t2_header": "多维翻译",
+        "t2_input": "输入文本:",
+        "t2_target": "翻译成:",
+        "t2_style": "风格:",
+        "t2_btn": "✏️ 翻译",
+        "t3_header": "思维竞技场",
+        "t3_persona_label": "选择对手:",
+        "t3_input": "输入辩论主题...",
+        "t3_clear": "🗑️ 清除聊天",
+        "t4_header": "🎙️ AI 多语言录音室",
+        "t4_voice": "选择声音:",
+        "t4_speed": "语速:",
+        "t4_btn": "🔊 生成音频",
+        "t5_header": "日志 & 历史",
+        "t5_refresh": "🔄 刷新历史",
+        "t5_empty": "暂无历史数据。",
+    }
+}
+
+def T(key):
+    """✅ SỬA: Translation helper với mapping"""
+    try:
+        display_lang = st.session_state.get('weaver_lang', 'Tiếng Việt')
+        lang_code = LANG_MAP.get(display_lang, 'vi')
+        return TRANS.get(lang_code, TRANS['vi']).get(key, key)
+    except Exception:
+        return TRANS['vi'].get(key, key)
+
+@st.cache_resource
+def load_models():
+    try:
+        model = load_encoder()
+        return model
+    except Exception:
+        return None
+
+def check_model_available():
+    model = load_models()
+    if model is None:
+        st.warning("⚠️ Chức năng Knowledge Graph tạm thời không khả dụng (thiếu RAM)")
+        return False
+    return True
+
+def doc_file_safe(uploaded_file):
+    return doc_file(uploaded_file)
+
+# ✅ FIX: KHÔNG còn upgrade Excel vào graph 18 sách tinh hoa.
+# Trước đây upgrade_existing_database() đổ toàn bộ sách Excel cá nhân vào
+# chung graph, khiến nhãn "(18 sách tinh hoa)" sai và bộ phân loại 4 tầng
+# bị lấn bởi sách không có tag khớp (rơi vào default "Văn hóa & Quyền lực").
+# Giờ: graph tinh hoa luôn đúng 18 cuốn, cố định. Sách Excel cá nhân được
+# so khớp riêng qua compute_similarity_with_excel() — đã tồn tại sẵn, không
+# đụng vào graph này.
+@st.cache_resource
+def get_knowledge_universe():
+    """Khởi tạo Knowledge Graph — luôn đúng 18 sách tinh hoa, không trộn Excel."""
+    try:
+        ku = init_knowledge_universe()
+        if not ku:
+            st.warning("⚠️ Không thể khởi tạo Knowledge Graph")
+            return None
+        total_books = len(ku.graph.nodes)
+        st.info(f"📚 Đã tải {total_books} sách tinh hoa vào Knowledge Graph (18 sách bao trùm 4 tầng triết học)")
+        return ku
+    except Exception as e:
+        st.error(f"❌ Lỗi khởi tạo Knowledge Graph: {e}")
+        return None
+
+# --- RUN ---
+def run():
+    ai = AI_Core()
+    voice = Voice_Engine()
+
+    # Khởi tạo KG
+    knowledge_universe = get_knowledge_universe()
+
+    # ✅ SỬA: Sidebar chỉ có selectbox ngôn ngữ
+    with st.sidebar:
+        st.markdown("---")
+        st.selectbox(
+            "🌐 " + T("lang_select"),
+            list(LANG_MAP.keys()),  # ✅ Dùng keys từ mapping
+            key="weaver_lang"
+        )
+
+    # ✅ ĐÚNG: Header nằm ngoài sidebar
+    st.header(f"🧠 The Cognitive Weaver")
+
+    # ✅ SỬA: Hiển thị trạng thái KG (không dùng eval)
+    if knowledge_universe:
+        summary = knowledge_universe.get_episteme_summary()
+        col1, col2, col3, col4 = st.columns(4)
+        layers = list(summary.keys())
+        for i, (layer, data) in enumerate(summary.items()):
+            if i == 0:
+                with col1:
+                    st.metric(layer[:15], f"{data['count']} sách", delta=f"{len(data['recent'])} recent")
+            elif i == 1:
+                with col2:
+                    st.metric(layer[:15], f"{data['count']} sách", delta=f"{len(data['recent'])} recent")
+            elif i == 2:
+                with col3:
+                    st.metric(layer[:15], f"{data['count']} sách", delta=f"{len(data['recent'])} recent")
+            elif i == 3:
+                with col4:
+                    st.metric(layer[:15], f"{data['count']} sách", delta=f"{len(data['recent'])} recent")
+
+    # Tabs
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([T("tab1"), T("tab2"), T("tab3"), T("tab4"), T("tab5")])
+
+
+    # TAB 1: RAG (CẢI TIẾN với KG integration)
+    with tab1:
+        st.header(T("t1_header"))
+        with st.container():
+            c1, c2, c3 = st.columns([1, 1, 1])
+            with c1:
+                file_excel = st.file_uploader(T("t1_up_excel"), type="xlsx", key="t1_excel")
+            with c2:
+                uploaded_files = st.file_uploader(T("t1_up_doc"), type=["pdf", "docx", "txt", "md", "html"], accept_multiple_files=True, key="t1_files")
+            with c3:
+                st.write("")
+                st.write("")
+                btn_run = st.button(T("t1_btn"), type="primary", use_container_width=True)
+
+        # (Đã bỏ reload KG theo Excel — graph 18 sách tinh hoa cố định,
+        #  không còn phụ thuộc vào việc có upload Excel hay không)
+
+        if btn_run and uploaded_files:
+            vec = load_encoder()
+            has_db_excel = bool(file_excel)
+
+            for f in uploaded_files:
+                text = doc_file_safe(f)
+                if not text:
+                    st.warning(f"⚠️ Không đọc được file {f.name}")
+                    continue
+
+                link = ""
+                matches = []
+                if has_db_excel and vec is not None:
+                    try:
+                        matches = compute_similarity_with_excel(text, pd.read_excel(file_excel).dropna(subset=["Tên sách"]), vec)
+                        if matches:
+                            link = "\n".join([f"- {m[0]} ({m[1]*100:.0f}%)" for m in matches])
+                    except Exception as e:
+                        st.warning(f"Không thể tính similarity: {e}")
+
+                # ✅ TÌM SÁCH LIÊN QUAN TỪ KG (Ưu tiên)
+                related = []
+                if knowledge_universe:
+                    try:
+                        related = knowledge_universe.find_related_books(text[:2000], top_k=5)
+                    except Exception as e:
+                        st.warning(f"Lỗi KG search: {e}")
+
+                # ✅ FIX Bước 0: nối retrieval vào prompt — trước đây `related`/`matches`
+                # chỉ hiển thị UI, AI không hề thấy khi viết bài phân tích.
+                retrieval_context = build_retrieval_context(related, matches)
+
+                with st.spinner(T("t1_analyzing").format(name=f.name)):
+                    res = analyze_document_streamlit(
+                        f.name, text,
+                        user_lang=st.session_state.get('weaver_lang', 'vi'),
+                        retrieval_context=retrieval_context,
+                    )
+                    # ✅ FIX: kiểm tra "Lỗi" bằng substring khiến bài phân tích hợp lệ
+                    # nhưng có chữ "Lỗi" trong nội dung (vd: "Lỗi Ngữ pháp" của Metzinger)
+                    # bị nhận nhầm là thất bại. analyze_document_streamlit() luôn trả về
+                    # chuỗi bắt đầu bằng "❌" khi thật sự lỗi — kiểm tra đúng dấu hiệu đó.
+                    if res and not res.strip().startswith("❌"):
+                        st.markdown(f"### 📄 {f.name}")
+                        if link:
+                            st.markdown("**🔗 Sách tương tự từ Excel:**")
+                            st.markdown(link)
+                        if related:
+                            st.markdown("**🪐 Sách liên quan từ Knowledge Graph (18 sách tinh hoa):**")
+                            for node_id, title, score, explanation in related:
+                                fp = knowledge_universe.graph.nodes[node_id].get("first_principles", "")
+                                st.markdown(f"- **{title}** ({score:.2f}) — {explanation}" + (f"\n  *First Principles:* {fp}" if fp else ""))
+                        st.markdown(res)
+                        st.markdown("---")
+                        store_history("Phân Tích Sách", f.name, res)
+                    else:
+                        st.error(f"❌ Không thể phân tích file {f.name}: {res}")
+
+        # Graph visualization (cải tiến với KG export)
+        if knowledge_universe:
+            with st.expander(T("t1_graph_title"), expanded=False):
+                try:
+                    nodes, edges = knowledge_universe.export_for_visualization()
+                    if nodes:
+                        from streamlit_agraph import agraph, Node, Edge, Config
+                        config = Config(width=1000, height=600, directed=True, physics=True)
+                        agraph(nodes[:50], edges[:100], config)  # Limit để tránh lag
+                except Exception as e:
+                    st.info("📊 Graph visualization tạm thời không khả dụng.")
+        elif file_excel:
+            # Fallback Excel graph (giữ nguyên logic cũ)
+            try:
+                if "df_viz" not in st.session_state:
+                    st.session_state.df_viz = pd.read_excel(file_excel).dropna(subset=["Tên sách"])
+                df_v = st.session_state.df_viz
+                
+                with st.expander(T("t1_graph_title"), expanded=False):
+                    if not check_model_available():
+                        pass  # đã hiển thị cảnh báo bên trong check_model_available()
+                    else:
+                        vec = load_models()
+                        if "book_embs" not in st.session_state:
+                            with st.spinner("Đang số hóa sách..."):
+                                st.session_state.book_embs = vec.encode(df_v["Tên sách"].tolist())
+
+                        embs = st.session_state.book_embs
+                        sim = cosine_similarity(embs)
+                        nodes, edges = [], []
+
+                        # Graph Config
+                        total_books = len(df_v)
+                        c_slider1, c_slider2 = st.columns(2)
+                        with c_slider1: max_nodes = st.slider("Số lượng sách hiển thị:", 5, total_books, min(50, total_books))
+                        with c_slider2: threshold = st.slider("Độ tương đồng nối dây:", 0.0, 1.0, 0.45)
+
+                        for i in range(max_nodes):
+                            nodes.append(Node(id=str(i), label=df_v.iloc[i]["Tên sách"], size=20, color="#FFD166"))
+                            for j in range(i+1, max_nodes):
+                                if sim[i,j]>threshold: edges.append(Edge(source=str(i), target=str(j), color="#118AB2"))
+
+                        config = Config(width=900, height=600, directed=False, physics=True, collapsible=False)
+                        agraph(nodes, edges, config)
+            except Exception:
+                pass
+
+    
+    # TAB 2: Dịch Thuật Đa Chiều (NÂNG CẤP - dùng TranslationOrchestrator)
+    with tab2:
+        st.subheader(T("t2_header"))
+        st.markdown("**Dịch văn bản đa ngôn ngữ với phong cách chuyên nghiệp, hỗ trợ interactive (tiếng Trung) và tải file HTML.**")
+
+        # Input text
+        input_text = st.text_area("Nhập văn bản cần dịch:", height=200, key="translator_input")
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            source_lang = st.selectbox(
+                "Ngôn ngữ nguồn:",
+                ["Chinese", "English", "Vietnamese", "French", "Japanese", "Korean"],
+                index=0
+            )
+        with col2:
+            target_lang = st.selectbox(
+                "Ngôn ngữ đích:",
+                ["Vietnamese", "English", "Chinese", "French", "Japanese", "Korean"],
+                index=0
+            )
+        with col3:
+            mode = st.radio("Chế độ dịch:", ["Standard (HTML đẹp)", "Interactive (chỉ tiếng Trung → Việt)"], horizontal=True)
+
+        include_english = st.checkbox("Thêm bản dịch tiếng Anh làm tham chiếu (nếu cần)", value=True)
+
+        if st.button("🚀 Dịch ngay", type="primary", use_container_width=True):
+            if not input_text.strip():
+                st.warning("Vui lòng nhập văn bản cần dịch.")
+            else:
+                # Lấy orchestrator
+                orchestrator = get_translation_orchestrator()
+                if not orchestrator:
+                    st.error("⚠️ Không tải được bộ dịch. Kiểm tra translator.py và API key.")
+                else:
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+
+                    def update_progress(value):
+                        progress_bar.progress(value)
+                        status_text.text(f"Đang dịch... {int(value*100)}%")
+
+                    try:
+                        html_output = None  # ✅ FIX: khởi tạo sẵn, tránh UnboundLocalError
+
+                        if mode == "Interactive (chỉ tiếng Trung → Việt)":
+                            if source_lang != "Chinese":
+                                st.error("Interactive mode chỉ hỗ trợ nguồn tiếng Trung. Hãy đổi 'Ngôn ngữ nguồn' thành Chinese, hoặc chọn chế độ 'Standard'.")
+                            else:
+                                status_text.text("Đang xử lý interactive translation...")
+                                html_output = orchestrator.translate_interactive(
+                                    input_text,
+                                    source_lang="Chinese",
+                                    target_lang=target_lang
+                                )
+                        else:
+                            status_text.text("Đang dịch và tạo HTML...")
+                            html_output = orchestrator.translate_document(
+                                input_text,
+                                source_lang=source_lang,
+                                target_lang=target_lang,
+                                include_english=include_english and target_lang != "English",
+                                progress_callback=update_progress
+                            )
+
+                        # ✅ FIX: nếu chưa có kết quả (do lệch mode/ngôn ngữ ở trên),
+                        # dừng ở đây — không chạy tiếp xuống phần tải/preview.
+                        if html_output is None:
+                            progress_bar.empty()
+                            status_text.empty()
+                        else:
+                            # Thành công
+                            progress_bar.progress(1.0)
+                            status_text.success("✅ Hoàn thành!")
+
+                            # Nút tải HTML
+                            st.download_button(
+                                label="📥 Tải file HTML kết quả",
+                                data=html_output.encode('utf-8'),
+                                file_name=f"translation_{source_lang}_to_{target_lang}.html",
+                                mime="text/html"
+                            )
+
+                            # Preview
+                            with st.expander("👀 Xem trước kết quả", expanded=True):
+                                st.components.v1.html(html_output, height=800, scrolling=True)
+
+                            # Lưu lịch sử
+                            store_history(
+                                "Dịch Thuật",
+                                f"{source_lang} → {target_lang} ({mode})",
+                                input_text[:300]
+                            )
+
+                    except Exception as e:
+                        progress_bar.empty()
+                        status_text.empty()
+                        st.error(f"❌ Lỗi trong quá trình dịch: {str(e)}")
+                        with st.expander("Chi tiết lỗi"):
+                            st.exception(e)
+
+    # TAB 3: Đấu trường
+    with tab3:
+        st.subheader(T("t3_header"))
+        mode = st.radio("Mode:", ["👤 Solo", "⚔️ Multi-Agent"], horizontal=True, key="w_t3_mode")
+        if "weaver_chat" not in st.session_state:
+            st.session_state.weaver_chat = []
+
+        if mode == "👤 Solo":
+            c1, c2 = st.columns([3, 1])
+            with c1:
+                persona = st.selectbox(T("t3_persona_label"), list(DEBATE_PERSONAS.keys()), key="w_t3_solo_p")
+            with c2:
+                if st.button(T("t3_clear"), key="w_t3_clr"):
+                    st.session_state.weaver_chat = []
+                    
+            for msg in st.session_state.weaver_chat:
+                st.chat_message(msg["role"]).write(msg["content"])
+            if prompt := st.chat_input(T("t3_input")):
+                st.chat_message("user").write(prompt)
+                st.session_state.weaver_chat.append({"role": "user", "content": prompt})
+                recent_history = st.session_state.weaver_chat[-10:]
+                context_text = "\n".join([f"{m['role'].upper()}: {m['content']}" for m in recent_history])
+                full_prompt = f"LỊCH SỬ:\n{context_text}\n\nNHIỆM VỤ: Trả lời câu hỏi mới nhất của USER."
+                with st.chat_message("assistant"):
+                    with st.spinner("..."):
+                        res = ai.generate(full_prompt, model_type="flash", system_instruction=DEBATE_PERSONAS[persona])
+                        if res:
+                            st.write(res)
+                            st.session_state.weaver_chat.append({"role": "assistant", "content": res})
+                            store_history("Tranh Biện Solo", f"{persona} - {prompt[:50]}...", f"Q: {prompt}\nA: {res}")
+                            
+        # ✅ THAY THẾ PHẦN MULTI-AGENT TRONG TAB 3
+        # ✅ SỬA: 3 vòng, chạy TUẦN TỰ (không còn song song) — mỗi người nói
+        # sau đọc được nguyên văn người nói ngay trước để phản biện thật,
+        # thay vì tất cả trả lời "mù" cùng lúc rồi ghép lại như trước.
+
+        else:  # Multi-Agent mode
+            all_personas = list(DEBATE_PERSONAS.keys())
+            participants = st.multiselect(
+                "Chọn Hội Đồng (2 hoặc 3 người):",
+                all_personas,
+                default=all_personas[:2],
+                max_selections=3
+            )
+            topic = st.text_input("Chủ đề:", key="w_t3_topic")
+            NUM_ROUNDS = st.radio("Số vòng thảo luận:", [2, 3], index=1, horizontal=True)
+
+            if st.button("🔥 KHAI CHIẾN", disabled=(len(participants) < 2 or not topic)):
+                st.session_state.weaver_chat = []
+                start_msg = f"📢 **CHỦ TỌA:** Khai mạc tranh luận {NUM_ROUNDS} vòng về: *'{topic}'*"
+                st.session_state.weaver_chat.append({"role": "system", "content": start_msg})
+                st.info(start_msg)
+                full_transcript = [start_msg]
+
+                # ✅ Mỗi lượt giờ là 1 lệnh gọi tuần tự (không còn batch song song)
+                # nên cần nhiều thời gian hơn — 45s/lượt là ước lượng khởi điểm
+                # [Inference, chưa đo thực tế], chỉnh lại nếu vẫn bị hết giờ.
+                MAX_DEBATE_TIME = 45 * NUM_ROUNDS * len(participants)
+                start_time = time.time()
+
+                icons = {
+                    "Kẻ Phản Biện": "😈",
+                    "🎩 Shushu": "🎩",
+                    "🙏 Phật Tổ": "🙏",
+                    "🤔 Logic & Phản Biện": "🤔",
+                    "📈 Thực Tế & Đột Phá": "📈"
+                }
+
+                # (prev_speaker, prev_content) của lượt nói liền trước — xuyên
+                # suốt cả 3 vòng, không reset theo từng vòng, vì "người sau
+                # phản biện người trước" áp dụng liên tục kể cả qua vòng mới.
+                prev_speaker, prev_content = None, None
+
+                with st.status(f"🔥 Cuộc chiến đang diễn ra ({NUM_ROUNDS} vòng)...") as status:
+                    try:
+                        for round_num in range(1, NUM_ROUNDS + 1):
+                            status.update(label=f"🔄 Vòng {round_num}/{NUM_ROUNDS}...")
+
+                            for p_name in participants:
+                                elapsed = time.time() - start_time
+                                if elapsed > MAX_DEBATE_TIME:
+                                    st.warning(f"⏰ Hết giờ! (Đã chạy {elapsed:.0f}s)")
+                                    raise TimeoutError("debate_timeout")
+
+                                # ✅ Người nói cuối cùng của vòng cuối = người đóng vòng
+                                # thảo luận (tổng kết), không chỉ phản biện như bình thường.
+                                is_closing_turn = (round_num == NUM_ROUNDS and p_name == participants[-1])
+
+                                if prev_speaker is None:
+                                    # Lượt mở màn — chưa có ai để phản biện
+                                    p_prompt = f"""CHỦ ĐỀ: {topic}
+
+NHIỆM VỤ: Nêu 1 quan điểm chính + 1-2 lý lẽ ngắn gọn.
+YÊU CẦU:
+- Tối đa 300 từ
+- Không dùng ký tự cảnh báo
+- Đi thẳng vào vấn đề"""
+                                elif is_closing_turn:
+                                    p_prompt = f"""CHỦ ĐỀ: {topic}
+
+Ý KIẾN CỦA {prev_speaker} (người nói ngay trước bạn):
+\"\"\"{prev_content[:800]}\"\"\"
+
+NHIỆM VỤ: Đây là lượt phát biểu CUỐI CÙNG của cuộc tranh biện {NUM_ROUNDS} vòng. Bạn phải làm 2 việc, theo đúng thứ tự:
+1. Phản biện trực tiếp lập luận của {prev_speaker} ở trên — như các vòng trước.
+2. Sau đó ĐÓNG VÒNG THẢO LUẬN: tổng kết ngắn gọn các luồng quan điểm chính đã xuất hiện xuyên suốt cả {NUM_ROUNDS} vòng, chỉ rõ điểm các bên đồng thuận (nếu có) và điểm còn bất đồng, rồi đưa ra kết luận cuối cùng của riêng bạn.
+YÊU CẦU:
+- Tối đa 400 từ
+- Không dùng ký tự cảnh báo
+- Phần tổng kết phải tách riêng rõ ràng, bắt đầu bằng dòng "**Kết luận:**\""""
+                                else:
+                                    p_prompt = f"""CHỦ ĐỀ: {topic}
+
+Ý KIẾN CỦA {prev_speaker} (người nói ngay trước bạn):
+\"\"\"{prev_content[:800]}\"\"\"
+
+NHIỆM VỤ: Phản biện trực tiếp lập luận của {prev_speaker} ở trên — chỉ rõ
+điểm bạn không đồng ý hoặc góc nhìn bạn muốn bổ sung — sau đó nêu quan điểm
+của riêng bạn.
+YÊU CẦU:
+- Tối đa 300 từ
+- Không dùng ký tự cảnh báo
+- Phải phản hồi cụ thể vào luận điểm của {prev_speaker}, không né tránh"""
+
+                                with st.spinner(f"🤖 {p_name} đang phản biện..."):
+                                    try:
+                                        result = ai.generate(
+                                            p_prompt,
+                                            model_type="flash",
+                                            system_instruction=DEBATE_PERSONAS[p_name],
+                                            max_tokens=2000,
+                                        )
+                                    except Exception as e:
+                                        st.warning(f"⚠️ {p_name} không phản hồi kịp thời: {e}")
+                                        continue
+
+                                clean_res = (result or "").replace(f"{p_name}:", "").strip()
+                                clean_res = clean_res.replace(f"**{p_name}:**", "").strip()
+                                clean_res = clean_res.replace("⚠️", "").strip()
+
+                                icon = icons.get(p_name, "🤖")
+                                round_label = f"Vòng {round_num}" + (" — Đóng vòng thảo luận 🏁" if is_closing_turn else "")
+                                content_fmt = f"### {icon} {p_name} — {round_label}\n\n{clean_res}"
+                                st.session_state.weaver_chat.append({"role": "assistant", "content": content_fmt})
+                                full_transcript.append(content_fmt)
+
+                                with st.chat_message("assistant", avatar=icon):
+                                    st.markdown(content_fmt)
+
+                                prev_speaker, prev_content = p_name, clean_res
+
+                        status.update(label="✅ Tranh luận kết thúc!", state="complete")
+
+                    except TimeoutError:
+                        status.update(label="⏰ Dừng do hết giờ", state="error")
+                    except Exception as e:
+                        st.error(f"❌ Lỗi nghiêm trọng: {e}")
+                        with st.expander("🔍 Stack trace đầy đủ"):
+                            st.exception(e)
+
+                full_log = "\n\n".join(full_transcript)
+                store_history("Hội Đồng Tranh Biện", f"Chủ đề: {topic}", full_log[:1000])
+
+
+    # TAB 4: VOICE
+    with tab4:
+        st.subheader(T("t4_header"))
+        
+        # 1. Chọn Giọng (Lấy từ Voice Engine)
+        if voice and hasattr(voice, 'VOICE_OPTIONS'):
+            voice_opts = list(voice.VOICE_OPTIONS.keys())
+            selected_voice = st.selectbox(T("t4_voice"), voice_opts, index=0)
+        else:
+            selected_voice = None
+            st.warning("⚠️ Chưa tải được module giọng nói.")
+
+        # 2. Chọn Tốc độ
+        speed = st.slider(T("t4_speed"), -50, 50, 0, format="%d%%")
+
+        # 3. Nhập văn bản
+        inp_v = st.text_area("Text:", height=150)
+        
+        if st.button(T("t4_btn")) and inp_v:
+            with st.spinner("Đang tạo âm thanh..."):
+                # Truyền giọng và tốc độ vào hàm speak
+                path = voice.speak(inp_v, voice_key=selected_voice, speed=speed)
+                if path: 
+                    st.audio(path)
+
+    # TAB 5: NHẬT KÝ (CÓ PHẦN BAYES)
+    with tab5:
+        st.subheader("⏳ Nhật Ký & Phản Chiếu Tư Duy")
+        if st.button("🔄 Tải lại", key="w_t5_refresh"):
+            st.session_state.history_cloud = tai_lich_su()
+
+        data = st.session_state.get("history_cloud", tai_lich_su())
+
+        if data:
+            df_h = pd.DataFrame(data)
+
+            if "SentimentScore" in df_h.columns:
+                try:
+                    df_h["score"] = pd.to_numeric(df_h["SentimentScore"], errors='coerce').fillna(0)
+                    import plotly.express as px
+                    fig = px.line(df_h, x="Time", y="score", markers=True, color_discrete_sequence=["#76FF03"])
+                    st.plotly_chart(fig, use_container_width=True)
+                except Exception:
+                    pass
+
+
+            with st.expander("🔮 Phân tích Tư duy theo xác suất Bayes (E.T. Jaynes)", expanded=False):
+                st.info("AI sẽ coi Lịch sử hoạt động của chị là 'Dữ liệu quan sát' (Evidence) để suy luận ra 'Hàm mục tiêu' (Objective Function) và sự dịch chuyển niềm tin của chị.")
+
+                if st.button("🧠 Chạy Mô hình Bayes ngay"):
+                    with st.spinner("Đang tính toán xác suất hậu nghiệm (Posterior)..."):
+                        recent_logs = df_h.tail(10).to_dict(orient="records")
+                        logs_text = json.dumps(recent_logs, ensure_ascii=False)
+
+                        bayes_prompt = f"""
+Đóng vai một nhà khoa học tư duy theo trường phái E.T. Jaynes (sách 'Probability Theory: The Logic of Science').
+
+DỮ LIỆU QUAN SÁT (EVIDENCE):
+Đây là nhật ký hoạt động của tôi:
+{logs_text}
+
+NHIỆM VỤ:
+Hãy phân tích chuỗi hành động này như một bài toán suy luận Bayes.
+1. **Xác định Priors (Niềm tin tiên nghiệm):** Dựa trên các hành động đầu, tôi đang quan tâm/tin tưởng điều gì?
+2. **Cập nhật Likelihood (Khả năng):** Các hành động tiếp theo củng cố hay làm yếu đi niềm tin đó?
+3. **Kết luận Posterior (Hậu nghiệm):** Trạng thái tư duy hiện tại của tôi đang hội tụ về đâu? Có mâu thuẫn (Inconsistency) nào trong logic hành động không?
+
+Trả lời ngắn gọn, sâu sắc, dùng thuật ngữ xác suất nhưng dễ hiểu.
+"""
+
+                        # ✅ DÙNG PARALLEL RACING cho Bayes (phức tạp, cần nhiều thời gian)
+                        analysis = ai.generate(
+                            bayes_prompt, 
+                            model_type="pro", 
+                            use_parallel=True  # ✅ BẬT PARALLEL MODE
+                        )
+                        st.markdown(analysis)
+
+
+            st.divider()
+            for index, item in df_h.iterrows():
+                t = str(item.get('Time', ''))
+                tp = str(item.get('Type', ''))
+                ti = str(item.get('Title', ''))
+                ct = str(item.get('Content', ''))
+
+                icon = "📝"
+                if "Tranh Biện" in tp:
+                    icon = "🗣️"
+                elif "Dịch" in tp:
+                    icon = "✏️"
+
+                with st.expander(f"{icon} {t} | {tp} | {ti}"):
+                    st.markdown(ct)
+        else:
+            st.info(T("t5_empty"))
